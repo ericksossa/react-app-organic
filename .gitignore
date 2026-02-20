@@ -1,0 +1,91 @@
+# ================================
+# Node
+# ================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Expo
+.expo/
+.expo-shared/
+dist/
+web-build/
+
+# Metro
+.metro-health-check*
+
+# ================================
+# iOS
+# ================================
+ios/build/
+ios/Pods/
+ios/DerivedData/
+*.xcworkspace
+*.xcuserdata
+*.xcuserstate
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.hmap
+*.ipa
+
+# CocoaPods
+Podfile.lock
+
+# ================================
+# Android
+# ================================
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+*.keystore
+*.jks
+
+# ================================
+# Logs
+# ================================
+*.log
+
+# ================================
+# Environment files
+# ================================
+.env
+.env.local
+.env.development
+.env.production
+.env.staging
+
+# ================================
+# macOS
+# ================================
+.DS_Store
+
+# ================================
+# VSCode
+# ================================
+.vscode/
+.idea/
+
+# ================================
+# TypeScript
+# ================================
+*.tsbuildinfo
+
+# ================================
+# Testing
+# ================================
+coverage/
+
+# ================================
+# Misc
+# ================================
+*.orig
+tmp/
+temp/
