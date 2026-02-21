@@ -14,12 +14,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { CatalogStackParamList } from '../../../app/navigation/types';
-import { CatalogProduct, getCatalog, getCategories } from '../../../services/api/catalogApi';
+import { CatalogProduct, getCatalog, getCategories, getProductBySlug } from '../../../services/api/catalogApi';
 import { AppCard } from '../../../shared/ui/AppCard';
 import { AppText } from '../../../shared/ui/AppText';
 import { AppButton } from '../../../shared/ui/AppButton';
 import { AppIcon } from '../../../shared/ui/AppIcon';
 import { useAvailabilityStore } from '../../../state/availabilityStore';
+import { useCartStore } from '../../../state/cartStore';
 import { colors } from '../../../shared/theme/tokens';
 import { listDeliveryZones } from '../../../services/api/availabilityApi';
 import { toCachedImageSource } from '../../../shared/utils/media';
@@ -27,52 +28,102 @@ import { useTheme } from '../../../shared/theme/useTheme';
 
 type Props = NativeStackScreenProps<CatalogStackParamList, 'CatalogMain'>;
 
+const CATEGORY_EMOJI: Record<string, string> = {
+  all: '✨',
+  frutas: '🍓',
+  fruta: '🍓',
+  verduras: '🥬',
+  vegetal: '🥬',
+  vegetales: '🥬',
+  hortalizas: '🥕',
+  lacteos: '🥛',
+  lacteo: '🥛',
+  panaderia: '🥖',
+  panadería: '🥖',
+  cereales: '🌾',
+  granos: '🌾',
+  legumbres: '🫘',
+  semillas: '🌻',
+  carnes: '🥩',
+  carne: '🥩',
+  pollo: '🍗',
+  pescado: '🐟',
+  mariscos: '🦐',
+  bebidas: '🥤',
+  infusiones: '🌱',
+  aromatica: '🌱',
+  aromática: '🌱',
+  especias: '🧂',
+  miel: '🍯',
+  snacks: '🥜',
+  desayuno: '🥣',
+  congelados: '🧊'
+};
+
+function getCategoryEmoji(name: string, slug?: string): string {
+  const normalizedSlug = slug?.trim().toLowerCase();
+  if (normalizedSlug && CATEGORY_EMOJI[normalizedSlug]) return CATEGORY_EMOJI[normalizedSlug];
+
+  const normalizedName = name.trim().toLowerCase();
+  const entry = Object.entries(CATEGORY_EMOJI).find(([key]) => normalizedName.includes(key));
+  return entry?.[1] ?? '🧺';
+}
+
 const CatalogRow = React.memo(function CatalogRow({
   item,
   index,
-  onOpen
+  onOpen,
+  onAdd,
+  adding
 }: {
   item: CatalogProduct;
   index: number;
   onOpen: (slug: string) => void;
+  onAdd: (product: CatalogProduct) => void;
+  adding: boolean;
 }) {
   const { colors: themeColors, isDark } = useTheme();
   const isAvailable = index % 4 !== 0;
 
   return (
-    <Pressable
-      style={[styles.productCard, { borderColor: themeColors.border1, backgroundColor: isDark ? '#0f1512' : '#f5f7f4' }]}
-      onPress={() => onOpen(item.slug)}
-    >
-      {item.imageUrl ? (
-        <Image source={toCachedImageSource(item.imageUrl)} style={styles.productImage} resizeMode="cover" />
-      ) : (
-        <View style={styles.imageFallback} />
-      )}
-      <View style={styles.productMeta}>
-        <AppText style={[styles.productName, { color: themeColors.text1 }]} numberOfLines={1}>
-          {item.name}
-        </AppText>
-        <AppText style={[styles.productPrice, { color: themeColors.text1 }]}>
-          COP{Number(item.priceFrom ?? 0).toLocaleString('es-CO')}
-        </AppText>
-        <View
-          style={[
-            styles.stockPill,
-            isAvailable
-              ? [styles.stockPillOk, !isDark && { borderColor: 'rgba(40,179,130,0.55)', backgroundColor: 'rgba(40,179,130,0.14)' }]
-              : [styles.stockPillOut, !isDark && { borderColor: 'rgba(184,72,72,0.55)', backgroundColor: 'rgba(184,72,72,0.12)' }]
-          ]}
-        >
-          <View style={styles.stockInline}>
-            <AppIcon name={isAvailable ? 'check-circle' : 'x-circle'} color={isAvailable ? (isDark ? '#cfe7d9' : '#1c5a44') : (isDark ? '#f0c0c0' : '#7d3030')} size={13} />
-            <AppText style={isAvailable ? [styles.stockTextOk, !isDark && { color: '#1c5a44' }] : [styles.stockTextOut, !isDark && { color: '#7d3030' }]}>
-              {isAvailable ? 'Dispo' : 'Agotado'}
-            </AppText>
+    <View style={[styles.productCard, { borderColor: themeColors.border1, backgroundColor: isDark ? '#0f1512' : '#f5f7f4' }]}>
+      <Pressable onPress={() => onOpen(item.slug)}>
+        {item.imageUrl ? (
+          <Image source={toCachedImageSource(item.imageUrl)} style={styles.productImage} resizeMode="cover" />
+        ) : (
+          <View style={styles.imageFallback} />
+        )}
+        <View style={styles.productMeta}>
+          <AppText style={[styles.productName, { color: themeColors.text1 }]} numberOfLines={1}>
+            {item.name}
+          </AppText>
+          <AppText style={[styles.productPrice, { color: themeColors.text1 }]}>
+            COP{Number(item.priceFrom ?? 0).toLocaleString('es-CO')}
+          </AppText>
+          <View
+            style={[
+              styles.stockPill,
+              isAvailable
+                ? [styles.stockPillOk, !isDark && { borderColor: 'rgba(40,179,130,0.55)', backgroundColor: 'rgba(40,179,130,0.14)' }]
+                : [styles.stockPillOut, !isDark && { borderColor: 'rgba(184,72,72,0.55)', backgroundColor: 'rgba(184,72,72,0.12)' }]
+            ]}
+          >
+            <View style={styles.stockInline}>
+              <AppIcon name={isAvailable ? 'check-circle' : 'x-circle'} color={isAvailable ? (isDark ? '#cfe7d9' : '#1c5a44') : (isDark ? '#f0c0c0' : '#7d3030')} size={13} />
+              <AppText style={isAvailable ? [styles.stockTextOk, !isDark && { color: '#1c5a44' }] : [styles.stockTextOut, !isDark && { color: '#7d3030' }]}>
+                {isAvailable ? 'Dispo' : 'Agotado'}
+              </AppText>
+            </View>
           </View>
         </View>
-      </View>
-    </Pressable>
+      </Pressable>
+      <AppButton
+        title={adding ? 'Agregando...' : 'Agregar'}
+        onPress={() => onAdd(item)}
+        disabled={adding}
+        style={styles.cardAddButton}
+      />
+    </View>
   );
 });
 
@@ -81,9 +132,12 @@ export function CatalogScreen({ navigation }: Props) {
   const zoneId = useAvailabilityStore((s) => s.selectedZoneId);
   const selectedZone = useAvailabilityStore((s) => s.selectedZone);
   const selectZone = useAvailabilityStore((s) => s.selectZone);
+  const addItem = useCartStore((s) => s.addItem);
   const [query, setQuery] = React.useState('');
   const [categorySlug, setCategorySlug] = React.useState<string | undefined>(undefined);
   const [zonePickerOpen, setZonePickerOpen] = React.useState(false);
+  const [addingProductId, setAddingProductId] = React.useState<string | null>(null);
+  const [addError, setAddError] = React.useState<string | null>(null);
 
   const zonesQuery = useQuery({
     queryKey: ['delivery-zones-catalog'],
@@ -133,6 +187,32 @@ export function CatalogScreen({ navigation }: Props) {
   const featured = products[0];
   const listData = featured ? products.slice(1) : products;
   const chips = [{ id: 'all', name: 'Todo', slug: undefined }, ...(categoriesQuery.data ?? [])];
+
+  const handleAddFromCatalog = React.useCallback(
+    async (product: CatalogProduct) => {
+      setAddError(null);
+      setAddingProductId(product.id);
+
+      try {
+        let variantId = product.defaultVariantId;
+        if (!variantId) {
+          const detail = await getProductBySlug(product.slug, zoneId ?? undefined);
+          variantId = detail?.variants?.[0]?.id;
+        }
+
+        if (!variantId) {
+          throw new Error('missing_variant');
+        }
+
+        await addItem({ variantId, qty: 1 });
+      } catch {
+        setAddError('No se pudo agregar este producto al carrito.');
+      } finally {
+        setAddingProductId(null);
+      }
+    },
+    [addItem, zoneId]
+  );
 
   React.useEffect(() => {
     const toPrefetch = products
@@ -190,7 +270,9 @@ export function CatalogScreen({ navigation }: Props) {
               ]}
               onPress={() => setCategorySlug(item.slug)}
             >
-              <AppText style={[isActive ? styles.chipTextActive : styles.chipText, { color: isActive ? themeColors.text1 : themeColors.text2 }]}>{item.name}</AppText>
+              <AppText style={[isActive ? styles.chipTextActive : styles.chipText, { color: isActive ? themeColors.text1 : themeColors.text2 }]}>
+                {`${getCategoryEmoji(item.name, item.slug)} ${item.name}`}
+              </AppText>
             </Pressable>
           );
         }}
@@ -200,6 +282,7 @@ export function CatalogScreen({ navigation }: Props) {
 
       {catalogQuery.isLoading ? <AppText>Cargando catalogo...</AppText> : null}
       {catalogQuery.isError ? <AppText style={{ color: themeColors.danger }}>No se pudo cargar el catalogo.</AppText> : null}
+      {addError ? <AppText style={{ color: themeColors.danger }}>{addError}</AppText> : null}
 
       {featured ? (
         <ImageBackground
@@ -212,8 +295,9 @@ export function CatalogScreen({ navigation }: Props) {
             <AppText style={styles.featuredEyebrow}>Seleccion editorial</AppText>
             <AppText style={styles.featuredName}>{featured.name}</AppText>
             <AppButton
-              title="Agregar"
-              onPress={() => navigation.navigate('ProductDetail', { slug: featured.slug })}
+              title={addingProductId === featured.id ? 'Agregando...' : 'Agregar'}
+              onPress={() => void handleAddFromCatalog(featured)}
+              disabled={addingProductId === featured.id}
               style={styles.addButton}
             />
           </View>
@@ -229,7 +313,15 @@ export function CatalogScreen({ navigation }: Props) {
   );
 
   const renderItem = ({ item, index }: ListRenderItemInfo<CatalogProduct>) => (
-    <CatalogRow item={item} index={index} onOpen={(slug) => navigation.navigate('ProductDetail', { slug })} />
+    <CatalogRow
+      item={item}
+      index={index}
+      onOpen={(slug) => navigation.navigate('ProductDetail', { slug })}
+      onAdd={(product) => {
+        void handleAddFromCatalog(product);
+      }}
+      adding={addingProductId === item.id}
+    />
   );
 
   return (
@@ -419,6 +511,10 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingBottom: 12,
     gap: 5
+  },
+  cardAddButton: {
+    marginHorizontal: 10,
+    marginBottom: 10
   },
   productPrice: {
     fontWeight: '700',

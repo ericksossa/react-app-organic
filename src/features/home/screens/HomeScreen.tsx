@@ -9,9 +9,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { Feather } from '@expo/vector-icons';
 import { AppButton } from '../../../shared/ui/AppButton';
 import { AppText } from '../../../shared/ui/AppText';
-import { AppIcon } from '../../../shared/ui/AppIcon';
 import { HomeStackParamList } from '../../../app/navigation/types';
 import { useAuthStore } from '../../../state/authStore';
 import { useAvailabilityStore } from '../../../state/availabilityStore';
@@ -52,7 +52,7 @@ type Props = NativeStackScreenProps<HomeStackParamList, 'HomeMain'>;
 type TopIconName = 'sun' | 'moon' | 'bookmark' | 'share' | 'search' | 'exit';
 
 function TopActionIcon({ name, color }: { name: TopIconName; color: string }) {
-  const iconName =
+  const iconName: React.ComponentProps<typeof Feather>['name'] =
     name === 'sun'
       ? 'sun'
       : name === 'moon'
@@ -60,12 +60,12 @@ function TopActionIcon({ name, color }: { name: TopIconName; color: string }) {
         : name === 'bookmark'
           ? 'bookmark'
           : name === 'share'
-            ? 'share'
+            ? 'share-2'
             : name === 'search'
               ? 'search'
-              : 'logout';
+              : 'log-out';
 
-  return <AppIcon name={iconName} color={color} size={17} />;
+  return <Feather name={iconName} color={color} size={21} />;
 }
 
 export function HomeScreen({ navigation }: Props) {
@@ -217,9 +217,9 @@ const styles = StyleSheet.create({
     gap: 10
   },
   iconButton: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center'
   },

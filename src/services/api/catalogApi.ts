@@ -8,6 +8,7 @@ export type CatalogProduct = {
   priceFrom?: number | string;
   imageUrl?: string;
   description?: string;
+  defaultVariantId?: string;
 };
 
 export type CatalogResponse = {
@@ -100,7 +101,10 @@ function normalizeCatalog(
 function normalizeProduct(value: unknown, index: number): CatalogProduct {
   const row = (value ?? {}) as Record<string, unknown>;
   const media = Array.isArray(row.media) ? row.media : [];
+  const variants = Array.isArray(row.variants) ? row.variants : [];
   const firstMedia = media[0] && typeof media[0] === 'object' ? (media[0] as Record<string, unknown>) : null;
+  const firstVariant =
+    variants[0] && typeof variants[0] === 'object' ? (variants[0] as Record<string, unknown>) : null;
 
   const id = asString(row.id) ?? `product-${index}`;
   const name = asString(row.name) ?? 'Producto';
@@ -108,8 +112,13 @@ function normalizeProduct(value: unknown, index: number): CatalogProduct {
   const priceFrom = asNumber(row.priceFrom) ?? asNumber(row.price_from) ?? asNumber(row.price);
   const imageUrl = resolveMediaUrl(asString(row.imageUrl) ?? asString(firstMedia?.url));
   const description = asString(row.description);
+  const defaultVariantId =
+    asString(row.defaultVariantId) ??
+    asString(row.default_variant_id) ??
+    asString(row.variantId) ??
+    asString(firstVariant?.id);
 
-  return { id, name, slug, priceFrom, imageUrl, description };
+  return { id, name, slug, priceFrom, imageUrl, description, defaultVariantId };
 }
 
 function asString(value: unknown): string | undefined {

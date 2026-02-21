@@ -1,20 +1,21 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { Feather } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { AppTabsParamList } from './types';
 import { HomeStackNavigator } from './HomeStackNavigator';
 import { CatalogStackNavigator } from './CatalogStackNavigator';
 import { CartStackNavigator } from './CartStackNavigator';
 import { useTheme } from '../../shared/theme/useTheme';
-import { AppIcon } from '../../shared/ui/AppIcon';
 
 const Tab = createBottomTabNavigator<AppTabsParamList>();
 
 export function AppTabsNavigator() {
   const { colors } = useTheme();
 
-  const icon = (name: 'leaf' | 'search' | 'bag', color: string, size: number) => (
-    <AppIcon name={name} color={color} size={size} />
-  );
+  const renderHomeIcon = (color: string) => <Ionicons name="leaf-outline" color={color} size={24} />;
+  const renderSearchIcon = (color: string) => <Feather name="search" color={color} size={24} />;
+  const renderCartIcon = (color: string) => <Feather name="shopping-cart" color={color} size={24} />;
 
   return (
     <Tab.Navigator
@@ -26,11 +27,14 @@ export function AppTabsNavigator() {
           backgroundColor: colors.surface1,
           borderTopColor: colors.border1,
           borderTopWidth: 1,
-          height: 64
+          height: 74,
+          paddingTop: 6,
+          paddingBottom: 8
         },
         tabBarLabelStyle: {
           fontSize: 12,
-          fontWeight: '700'
+          fontWeight: '500',
+          marginTop: 1
         }
       }}
     >
@@ -39,7 +43,7 @@ export function AppTabsNavigator() {
         component={HomeStackNavigator}
         options={{
           title: 'Home',
-          tabBarIcon: ({ color, size }) => icon('leaf', color, size)
+          tabBarIcon: ({ color }) => renderHomeIcon(color)
         }}
       />
       <Tab.Screen
@@ -47,7 +51,7 @@ export function AppTabsNavigator() {
         component={CatalogStackNavigator}
         options={{
           title: 'Explorar',
-          tabBarIcon: ({ color, size }) => icon('search', color, size)
+          tabBarIcon: ({ color }) => renderSearchIcon(color)
         }}
       />
       <Tab.Screen
@@ -55,7 +59,7 @@ export function AppTabsNavigator() {
         component={CartStackNavigator}
         options={{
           title: 'Carrito',
-          tabBarIcon: ({ color, size }) => icon('bag', color, size)
+          tabBarIcon: ({ color }) => renderCartIcon(color)
         }}
       />
     </Tab.Navigator>
