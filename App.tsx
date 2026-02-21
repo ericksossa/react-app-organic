@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AppNavigator } from './src/app/navigation/AppNavigator';
 import { useBootstrapAuth } from './src/services/auth/useBootstrapAuth';
 import { AppErrorBoundary } from './src/shared/ui/AppErrorBoundary';
+import { useTheme } from './src/shared/theme/useTheme';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -22,11 +23,12 @@ const queryClient = new QueryClient({
 
 export default function App() {
   useBootstrapAuth();
+  const { isDark } = useTheme();
 
   return (
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>
-        <StatusBar style="light" />
+        <StatusBar style={isDark ? 'light' : 'dark'} />
         <AppErrorBoundary>
           <AppNavigator />
         </AppErrorBoundary>

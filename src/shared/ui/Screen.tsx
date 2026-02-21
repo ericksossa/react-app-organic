@@ -1,6 +1,7 @@
 import React, { PropsWithChildren } from 'react';
 import { SafeAreaView, ScrollView, ViewStyle } from 'react-native';
-import { colors, spacing } from '../theme/tokens';
+import { spacing } from '../theme/tokens';
+import { useTheme } from '../theme/useTheme';
 
 type Props = PropsWithChildren<{
   scroll?: boolean;
@@ -8,6 +9,8 @@ type Props = PropsWithChildren<{
 }>;
 
 export function Screen({ children, scroll = true, contentStyle }: Props) {
+  const { colors } = useTheme();
+
   if (!scroll) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg, padding: spacing.lg }}>{children}</SafeAreaView>

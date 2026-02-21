@@ -10,6 +10,7 @@ import { createOrder, DeliveryMode } from '../../../services/api/ordersApi';
 import { useCartStore } from '../../../state/cartStore';
 import { colors } from '../../../shared/theme/tokens';
 import { getErrorMessage } from '../../../shared/errors/apiError';
+import { useTheme } from '../../../shared/theme/useTheme';
 
 function toIsoOrUndefined(value: string): string | undefined {
   const parsed = value.trim();
@@ -20,6 +21,7 @@ function toIsoOrUndefined(value: string): string | undefined {
 }
 
 export function CheckoutScreen() {
+  const { colors: themeColors, isDark } = useTheme();
   const [selectedAddressId, setSelectedAddressId] = React.useState<string | null>(null);
   const [addressModalOpen, setAddressModalOpen] = React.useState(false);
   const [note, setNote] = React.useState('');
@@ -88,33 +90,33 @@ export function CheckoutScreen() {
     <Screen>
       <AppText variant="title">Checkout</AppText>
 
-      <AppCard style={styles.summaryCard}>
+      <AppCard style={[styles.summaryCard, { backgroundColor: themeColors.surface1, borderColor: themeColors.border1 }]}>
         <AppText variant="heading">Resumen</AppText>
-        <AppText style={styles.meta}>{itemsCount} items en tu pedido</AppText>
+        <AppText style={[styles.meta, { color: themeColors.text2 }]}>{itemsCount} items en tu pedido</AppText>
         <View style={styles.rows}>
           <View style={styles.row}>
-            <AppText style={styles.rowLabel}>Subtotal</AppText>
+            <AppText style={[styles.rowLabel, { color: themeColors.text2 }]}>Subtotal</AppText>
             <AppText>${Number(subtotal).toLocaleString('es-CO')}</AppText>
           </View>
           <View style={styles.row}>
-            <AppText style={styles.rowLabel}>Delivery fee</AppText>
+            <AppText style={[styles.rowLabel, { color: themeColors.text2 }]}>Delivery fee</AppText>
             <AppText>${Number(deliveryFee).toLocaleString('es-CO')}</AppText>
           </View>
           {discount > 0 ? (
             <View style={styles.row}>
-              <AppText style={styles.rowLabel}>Descuento</AppText>
+              <AppText style={[styles.rowLabel, { color: themeColors.text2 }]}>Descuento</AppText>
               <AppText>- ${Number(discount).toLocaleString('es-CO')}</AppText>
             </View>
           ) : null}
         </View>
-        <View style={styles.divider} />
+        <View style={[styles.divider, { backgroundColor: themeColors.border1 }]} />
         <View style={styles.totalRow}>
           <AppText style={styles.totalLabel}>Total</AppText>
           <AppText style={styles.totalValue}>${Number(total).toLocaleString('es-CO')}</AppText>
         </View>
       </AppCard>
 
-      <AppCard style={styles.addressCard}>
+      <AppCard style={[styles.addressCard, { backgroundColor: themeColors.surface1, borderColor: themeColors.border1 }]}>
         <View style={styles.addressHeader}>
           <AppText variant="heading">Dirección de entrega</AppText>
           <AppButton title="Cambiar" tone="ghost" onPress={() => setAddressModalOpen(true)} disabled={addresses.length === 0} />
@@ -127,12 +129,12 @@ export function CheckoutScreen() {
           </View>
         ) : (
           <View style={{ gap: 10 }}>
-            <AppText style={styles.meta}>No tienes una dirección seleccionada.</AppText>
-          </View>
-        )}
+              <AppText style={[styles.meta, { color: themeColors.text2 }]}>No tienes una dirección seleccionada.</AppText>
+            </View>
+          )}
       </AppCard>
 
-      <AppCard>
+      <AppCard style={{ backgroundColor: themeColors.surface1, borderColor: themeColors.border1 }}>
         <AppText variant="heading">Modo de entrega</AppText>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
           <AppButton title="Propia" tone={deliveryMode === 'own' ? 'primary' : 'ghost'} onPress={() => setDeliveryMode('own')} />
@@ -145,32 +147,32 @@ export function CheckoutScreen() {
         </View>
       </AppCard>
 
-      <AppCard>
+      <AppCard style={{ backgroundColor: themeColors.surface1, borderColor: themeColors.border1 }}>
         <AppText variant="heading">Ventana (opcional)</AppText>
         <TextInput
           placeholder="Inicio (ej: 2026-03-01 14:00)"
-          placeholderTextColor={colors.text2}
-          style={styles.input}
+          placeholderTextColor={themeColors.text2}
+          style={[styles.input, { color: themeColors.text1, borderColor: themeColors.border1 }]}
           value={slotStartInput}
           onChangeText={setSlotStartInput}
         />
         <TextInput
           placeholder="Fin (ej: 2026-03-01 16:00)"
-          placeholderTextColor={colors.text2}
-          style={styles.input}
+          placeholderTextColor={themeColors.text2}
+          style={[styles.input, { color: themeColors.text1, borderColor: themeColors.border1 }]}
           value={slotEndInput}
           onChangeText={setSlotEndInput}
         />
         <TextInput
           placeholder="Nota de entrega (opcional)"
-          placeholderTextColor={colors.text2}
-          style={styles.input}
+          placeholderTextColor={themeColors.text2}
+          style={[styles.input, { color: themeColors.text1, borderColor: themeColors.border1 }]}
           value={note}
           onChangeText={setNote}
         />
       </AppCard>
 
-      {errorMessage ? <AppText style={styles.errorText}>{errorMessage}</AppText> : null}
+      {errorMessage ? <AppText style={[styles.errorText, { color: themeColors.danger, borderColor: themeColors.danger }]}>{errorMessage}</AppText> : null}
       {createdOrderId ? <AppText style={{ color: '#89c8a3' }}>Orden creada: {createdOrderId}</AppText> : null}
 
       <AppButton
@@ -180,16 +182,20 @@ export function CheckoutScreen() {
       />
 
       <Modal visible={addressModalOpen} transparent animationType="fade" onRequestClose={() => setAddressModalOpen(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setAddressModalOpen(false)}>
-          <Pressable style={styles.modalCard} onPress={() => {}}>
+        <Pressable style={[styles.modalBackdrop, { backgroundColor: isDark ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.2)' }]} onPress={() => setAddressModalOpen(false)}>
+          <Pressable style={[styles.modalCard, { backgroundColor: themeColors.surface1, borderColor: themeColors.border1 }]} onPress={() => {}}>
             <AppText variant="heading">Selecciona dirección</AppText>
             {addressesQuery.isLoading ? <AppText>Cargando direcciones...</AppText> : null}
-            {addressesQuery.isError ? <AppText style={styles.errorText}>No se pudieron cargar direcciones.</AppText> : null}
+            {addressesQuery.isError ? <AppText style={[styles.errorText, { color: themeColors.danger, borderColor: themeColors.danger }]}>No se pudieron cargar direcciones.</AppText> : null}
             <View style={{ gap: 8 }}>
               {addresses.map((address) => (
                 <Pressable
                   key={address.id}
-                  style={[styles.addressOption, selectedAddressId === address.id ? styles.addressOptionActive : null]}
+                  style={[
+                    styles.addressOption,
+                    { borderColor: themeColors.border1, backgroundColor: themeColors.surface2 },
+                    selectedAddressId === address.id ? styles.addressOptionActive : null
+                  ]}
                   onPress={() => {
                     setSelectedAddressId(address.id);
                     setAddressModalOpen(false);

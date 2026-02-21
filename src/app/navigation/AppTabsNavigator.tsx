@@ -1,17 +1,19 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text } from 'react-native';
 import { AppTabsParamList } from './types';
 import { HomeStackNavigator } from './HomeStackNavigator';
 import { CatalogStackNavigator } from './CatalogStackNavigator';
 import { CartStackNavigator } from './CartStackNavigator';
-import { colors } from '../../shared/theme/tokens';
+import { useTheme } from '../../shared/theme/useTheme';
+import { AppIcon } from '../../shared/ui/AppIcon';
 
 const Tab = createBottomTabNavigator<AppTabsParamList>();
 
 export function AppTabsNavigator() {
-  const icon = (glyph: string, color: string, size: number) => (
-    <Text style={{ color, fontSize: size }}>{glyph}</Text>
+  const { colors } = useTheme();
+
+  const icon = (name: 'leaf' | 'search' | 'bag', color: string, size: number) => (
+    <AppIcon name={name} color={color} size={size} />
   );
 
   return (
@@ -37,7 +39,7 @@ export function AppTabsNavigator() {
         component={HomeStackNavigator}
         options={{
           title: 'Home',
-          tabBarIcon: ({ color, size }) => icon('⌂', color, size)
+          tabBarIcon: ({ color, size }) => icon('leaf', color, size)
         }}
       />
       <Tab.Screen
@@ -45,7 +47,7 @@ export function AppTabsNavigator() {
         component={CatalogStackNavigator}
         options={{
           title: 'Explorar',
-          tabBarIcon: ({ color, size }) => icon('⌕', color, size)
+          tabBarIcon: ({ color, size }) => icon('search', color, size)
         }}
       />
       <Tab.Screen
@@ -53,7 +55,7 @@ export function AppTabsNavigator() {
         component={CartStackNavigator}
         options={{
           title: 'Carrito',
-          tabBarIcon: ({ color, size }) => icon('🛒', color, size - 1)
+          tabBarIcon: ({ color, size }) => icon('bag', color, size)
         }}
       />
     </Tab.Navigator>

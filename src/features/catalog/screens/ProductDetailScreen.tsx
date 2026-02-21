@@ -12,15 +12,18 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { CatalogStackParamList } from '../../../app/navigation/types';
 import { AppButton } from '../../../shared/ui/AppButton';
 import { AppText } from '../../../shared/ui/AppText';
+import { AppIcon } from '../../../shared/ui/AppIcon';
 import { getProductBySlug } from '../../../services/api/catalogApi';
 import { useAvailabilityStore } from '../../../state/availabilityStore';
 import { useCartStore } from '../../../state/cartStore';
 import { colors } from '../../../shared/theme/tokens';
 import { toCachedImageSource } from '../../../shared/utils/media';
+import { useTheme } from '../../../shared/theme/useTheme';
 
 type Props = NativeStackScreenProps<CatalogStackParamList, 'ProductDetail'>;
 
 export function ProductDetailScreen({ route, navigation }: Props) {
+  const { colors: themeColors, isDark } = useTheme();
   const zoneId = useAvailabilityStore((s) => s.selectedZoneId);
   const addItem = useCartStore((s) => s.addItem);
   const [selectedVariantId, setSelectedVariantId] = React.useState<string | null>(null);
@@ -56,7 +59,7 @@ export function ProductDetailScreen({ route, navigation }: Props) {
   const heroBrand = (product?.brand ?? 'Origen local').toUpperCase();
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.bg }]} edges={['top', 'bottom']}>
       {productQuery.isLoading ? (
         <View style={styles.stateWrap}>
           <AppText>Cargando detalle...</AppText>
@@ -65,7 +68,7 @@ export function ProductDetailScreen({ route, navigation }: Props) {
 
       {productQuery.isError ? (
         <View style={styles.stateWrap}>
-          <AppText style={{ color: colors.danger }}>No se pudo cargar el producto.</AppText>
+          <AppText style={{ color: themeColors.danger }}>No se pudo cargar el producto.</AppText>
         </View>
       ) : null}
 
@@ -77,26 +80,26 @@ export function ProductDetailScreen({ route, navigation }: Props) {
               style={styles.hero}
               imageStyle={styles.heroImage}
             >
-              <View style={styles.heroOverlay} />
+              <View style={[styles.heroOverlay, { backgroundColor: isDark ? 'rgba(6, 9, 8, 0.24)' : 'rgba(255,255,255,0.16)' }]} />
 
               <View style={styles.heroTopActions}>
                 <Pressable style={styles.heroIconBtn} onPress={() => navigation.goBack()}>
-                  <AppText style={styles.heroIcon}>‹</AppText>
+                  <AppIcon name="back" color={isDark ? '#f3f7f5' : '#1f2421'} size={18} />
                 </Pressable>
                 <View style={styles.heroRightActions}>
                   <Pressable style={styles.heroIconBtn}>
-                    <AppText style={styles.heroIcon}>⌖</AppText>
+                    <AppIcon name="bookmark" color={isDark ? '#f3f7f5' : '#1f2421'} size={18} />
                   </Pressable>
                   <Pressable style={styles.heroIconBtn}>
-                    <AppText style={styles.heroIcon}>⤴</AppText>
+                    <AppIcon name="share" color={isDark ? '#f3f7f5' : '#1f2421'} size={18} />
                   </Pressable>
                 </View>
               </View>
 
               <View style={styles.heroContent}>
-                <AppText style={styles.heroEyebrow}>{heroBrand}</AppText>
-                <AppText style={styles.heroTitle}>{product.name}</AppText>
-                <AppText style={styles.heroMeta}>100% organico</AppText>
+                <AppText style={[styles.heroEyebrow, { color: isDark ? 'rgba(241,246,243,0.86)' : '#2d3631' }]}>{heroBrand}</AppText>
+                <AppText style={[styles.heroTitle, { color: isDark ? '#f4f7f5' : '#1d2320' }]}>{product.name}</AppText>
+                <AppText style={[styles.heroMeta, { color: isDark ? '#ebf1ed' : '#2d3631' }]}>100% organico</AppText>
               </View>
             </ImageBackground>
 
@@ -110,13 +113,35 @@ export function ProductDetailScreen({ route, navigation }: Props) {
                   <Pressable
                     key={variant.id}
                     onPress={() => setSelectedVariantId(variant.id)}
-                    style={[styles.variantRow, selected && styles.variantRowActive]}
+                    style={[
+                      styles.variantRow,
+                      {
+                        borderColor: themeColors.border1,
+                        backgroundColor: isDark ? '#0d1512' : '#f3f6f3'
+                      },
+                      selected &&
+                        [
+                          styles.variantRowActive,
+                          {
+                            borderColor: isDark ? 'rgba(72, 214, 155, 0.5)' : 'rgba(40,179,130,0.55)',
+                            backgroundColor: isDark ? '#10211b' : '#ddf2e8'
+                          }
+                        ]
+                    ]}
                   >
                     <View style={{ flex: 1 }}>
                       <AppText style={styles.variantName}>{variant.name}</AppText>
-                      <AppText style={styles.variantMeta}>COP{price.toLocaleString('es-CO')} · Disponible: 50</AppText>
+                      <AppText style={[styles.variantMeta, { color: themeColors.text2 }]}>
+                        COP{price.toLocaleString('es-CO')} · Disponible: 50
+                      </AppText>
                     </View>
-                    <View style={[styles.radio, selected && styles.radioActive]}>
+                    <View
+                      style={[
+                        styles.radio,
+                        { borderColor: isDark ? 'rgba(72, 214, 155, 0.8)' : 'rgba(40,179,130,0.8)' },
+                        selected && styles.radioActive
+                      ]}
+                    >
                       {selected ? <View style={styles.radioInner} /> : null}
                     </View>
                   </Pressable>
@@ -126,16 +151,24 @@ export function ProductDetailScreen({ route, navigation }: Props) {
           </ScrollView>
 
           <View style={styles.bottomBarWrap}>
-            <View style={styles.bottomBar}>
+            <View
+              style={[
+                styles.bottomBar,
+                {
+                  borderColor: themeColors.border1,
+                  backgroundColor: isDark ? 'rgba(8,14,12,0.94)' : 'rgba(247,250,248,0.96)'
+                }
+              ]}
+            >
               <View style={styles.quickActions}>
-                <Pressable style={styles.quickBtn}>
-                  <AppText style={styles.quickIcon}>◷</AppText>
+                <Pressable style={[styles.quickBtn, { borderColor: themeColors.border1, backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)' }]}>
+                  <AppIcon name="clock" color={themeColors.text1} size={14} />
                 </Pressable>
-                <Pressable style={styles.quickBtn}>
-                  <AppText style={styles.quickIcon}>⌖</AppText>
+                <Pressable style={[styles.quickBtn, { borderColor: themeColors.border1, backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)' }]}>
+                  <AppIcon name="bookmark" color={themeColors.text1} size={14} />
                 </Pressable>
-                <Pressable style={styles.quickBtn}>
-                  <AppText style={styles.quickIcon}>⎘</AppText>
+                <Pressable style={[styles.quickBtn, { borderColor: themeColors.border1, backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)' }]}>
+                  <AppIcon name="copy" color={themeColors.text1} size={14} />
                 </Pressable>
               </View>
 
@@ -146,7 +179,7 @@ export function ProductDetailScreen({ route, navigation }: Props) {
                 style={styles.addCta}
               />
             </View>
-            {error ? <AppText style={styles.errorText}>{error}</AppText> : null}
+            {error ? <AppText style={[styles.errorText, { color: themeColors.danger }]}>{error}</AppText> : null}
           </View>
         </>
       ) : null}
@@ -197,10 +230,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center'
-  },
-  heroIcon: {
-    color: '#f3f7f5',
-    fontSize: 20
   },
   heroContent: {
     paddingHorizontal: 16,
@@ -304,10 +333,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.03)',
     alignItems: 'center',
     justifyContent: 'center'
-  },
-  quickIcon: {
-    color: 'rgba(239,245,241,0.88)',
-    fontSize: 14
   },
   addCta: {
     flex: 1,

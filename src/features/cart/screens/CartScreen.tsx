@@ -7,10 +7,12 @@ import { CartStackParamList } from '../../../app/navigation/types';
 import { AppText } from '../../../shared/ui/AppText';
 import { AppCard } from '../../../shared/ui/AppCard';
 import { AppButton } from '../../../shared/ui/AppButton';
+import { AppIcon } from '../../../shared/ui/AppIcon';
 import { useCartStore } from '../../../state/cartStore';
 import { colors } from '../../../shared/theme/tokens';
 import { CartItem } from '../types';
 import { toCachedImageSource } from '../../../shared/utils/media';
+import { useTheme } from '../../../shared/theme/useTheme';
 
 type Props = NativeStackScreenProps<CartStackParamList, 'CartMain'>;
 
@@ -23,14 +25,21 @@ const QtyControl = React.memo(function QtyControl({
   onMinus: () => void;
   onPlus: () => void;
 }) {
+  const { colors: themeColors, isDark } = useTheme();
   return (
     <View style={styles.qtyControls}>
-      <Pressable onPress={onMinus} style={styles.qtyBtn}>
-        <Text style={styles.qtyBtnText}>-</Text>
+      <Pressable
+        onPress={onMinus}
+        style={[styles.qtyBtn, { borderColor: themeColors.border1, backgroundColor: isDark ? colors.surface1 : '#f1f4f1' }]}
+      >
+        <Text style={[styles.qtyBtnText, { color: themeColors.text1 }]}>-</Text>
       </Pressable>
-      <Text style={styles.qtyValue}>{value}</Text>
-      <Pressable onPress={onPlus} style={styles.qtyBtn}>
-        <Text style={styles.qtyBtnText}>+</Text>
+      <Text style={[styles.qtyValue, { color: themeColors.text1 }]}>{value}</Text>
+      <Pressable
+        onPress={onPlus}
+        style={[styles.qtyBtn, { borderColor: themeColors.border1, backgroundColor: isDark ? colors.surface1 : '#f1f4f1' }]}
+      >
+        <Text style={[styles.qtyBtnText, { color: themeColors.text1 }]}>+</Text>
       </Pressable>
     </View>
   );
@@ -47,8 +56,9 @@ const CartRow = React.memo(function CartRow({
   onIncrease: (id: string, qty: number) => void;
   onRemove: (id: string) => void;
 }) {
+  const { colors: themeColors, isDark } = useTheme();
   return (
-    <View style={styles.rowCard}>
+    <View style={[styles.rowCard, { borderColor: themeColors.border1, backgroundColor: isDark ? colors.surface2 : '#f7f9f6' }]}>
       <View style={styles.rowTop}>
         {item.imageUrl ? (
           <Image source={toCachedImageSource(item.imageUrl)} style={styles.thumb} resizeMode="cover" />
@@ -57,15 +67,18 @@ const CartRow = React.memo(function CartRow({
         )}
         <View style={styles.rowMeta}>
           <AppText style={styles.rowTitle}>{item.name}</AppText>
-          <AppText style={styles.rowSub}>{item.variantName}</AppText>
+          <AppText style={[styles.rowSub, { color: themeColors.text2 }]}>{item.variantName}</AppText>
           <AppText style={styles.rowPrice}>${item.unitPrice.toLocaleString('es-CO')}</AppText>
         </View>
       </View>
 
       <View style={styles.rowActions}>
         <QtyControl value={item.qty} onMinus={() => onDecrease(item.id, item.qty)} onPlus={() => onIncrease(item.id, item.qty)} />
-        <Pressable onPress={() => onRemove(item.id)} style={styles.removeBtn}>
-          <Text style={styles.removeBtnText}>×</Text>
+        <Pressable
+          onPress={() => onRemove(item.id)}
+          style={[styles.removeBtn, { borderColor: themeColors.border1, backgroundColor: isDark ? colors.surface1 : '#f1f4f1' }]}
+        >
+          <AppIcon name="x-circle" color={themeColors.text2} size={16} />
         </Pressable>
       </View>
     </View>
@@ -73,6 +86,7 @@ const CartRow = React.memo(function CartRow({
 });
 
 export function CartScreen({ navigation }: Props) {
+  const { colors: themeColors, isDark } = useTheme();
   const snapshot = useCartStore((s) => s.snapshot);
   const load = useCartStore((s) => s.load);
   const updateItemQty = useCartStore((s) => s.updateItemQty);
@@ -101,13 +115,20 @@ export function CartScreen({ navigation }: Props) {
   const listHeader = (
     <View style={styles.headerWrap}>
       {loading ? <AppText>Cargando carrito...</AppText> : null}
-      {error ? <AppText style={{ color: colors.danger }}>{error}</AppText> : null}
+      {error ? <AppText style={{ color: themeColors.danger }}>{error}</AppText> : null}
       {!loading && !error && items.length === 0 ? (
-        <AppCard style={styles.emptyCard}>
+        <AppCard
+          style={[
+            styles.emptyCard,
+            { backgroundColor: isDark ? '#0f1815' : '#f4f6f3', borderColor: themeColors.border1 }
+          ]}
+        >
           <AppText variant="heading" style={styles.emptyTitle}>
             Tu carrito está vacío
           </AppText>
-          <AppText style={styles.emptySubtitle}>Agrega productos del catálogo para comenzar.</AppText>
+          <AppText style={[styles.emptySubtitle, { color: themeColors.text2 }]}>
+            Agrega productos del catálogo para comenzar.
+          </AppText>
         </AppCard>
       ) : null}
     </View>
@@ -115,10 +136,17 @@ export function CartScreen({ navigation }: Props) {
 
   const listFooter = items.length > 0 && !loading ? (
     <View style={styles.footerWrap}>
-      <View style={styles.summaryCard}>
+      <View
+        style={[
+          styles.summaryCard,
+          { borderColor: themeColors.border1, backgroundColor: isDark ? colors.surface1 : '#f4f7f4' }
+        ]}
+      >
         <View>
-          <Text style={styles.summaryLabel}>Subtotal ({items.length} items)</Text>
-          <Text style={styles.summaryPrice}>${Number(total).toLocaleString('es-CO')}</Text>
+          <Text style={[styles.summaryLabel, { color: themeColors.text2 }]}>Subtotal ({items.length} items)</Text>
+          <Text style={[styles.summaryPrice, { color: themeColors.text1 }]}>
+            ${Number(total).toLocaleString('es-CO')}
+          </Text>
         </View>
         <AppButton title="Continuar" onPress={() => navigation.navigate('Checkout')} />
       </View>
@@ -126,11 +154,11 @@ export function CartScreen({ navigation }: Props) {
   ) : null;
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.bg }]}>
       <View style={styles.topHeader}>
         <AppText style={styles.topHeaderTitle}>Carrito</AppText>
       </View>
-      <View style={styles.topDivider} />
+      <View style={[styles.topDivider, { backgroundColor: themeColors.border1 }]} />
 
       <FlatList
         data={items}
@@ -270,11 +298,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface1,
     borderWidth: 1,
     borderColor: colors.border1
-  },
-  removeBtnText: {
-    color: colors.text2,
-    fontSize: 22,
-    lineHeight: 22
   },
   footerWrap: {
     marginTop: 6

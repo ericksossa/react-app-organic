@@ -18,10 +18,12 @@ import { CatalogProduct, getCatalog, getCategories } from '../../../services/api
 import { AppCard } from '../../../shared/ui/AppCard';
 import { AppText } from '../../../shared/ui/AppText';
 import { AppButton } from '../../../shared/ui/AppButton';
+import { AppIcon } from '../../../shared/ui/AppIcon';
 import { useAvailabilityStore } from '../../../state/availabilityStore';
 import { colors } from '../../../shared/theme/tokens';
 import { listDeliveryZones } from '../../../services/api/availabilityApi';
 import { toCachedImageSource } from '../../../shared/utils/media';
+import { useTheme } from '../../../shared/theme/useTheme';
 
 type Props = NativeStackScreenProps<CatalogStackParamList, 'CatalogMain'>;
 
@@ -34,24 +36,40 @@ const CatalogRow = React.memo(function CatalogRow({
   index: number;
   onOpen: (slug: string) => void;
 }) {
+  const { colors: themeColors, isDark } = useTheme();
   const isAvailable = index % 4 !== 0;
 
   return (
-    <Pressable style={styles.productCard} onPress={() => onOpen(item.slug)}>
+    <Pressable
+      style={[styles.productCard, { borderColor: themeColors.border1, backgroundColor: isDark ? '#0f1512' : '#f5f7f4' }]}
+      onPress={() => onOpen(item.slug)}
+    >
       {item.imageUrl ? (
         <Image source={toCachedImageSource(item.imageUrl)} style={styles.productImage} resizeMode="cover" />
       ) : (
         <View style={styles.imageFallback} />
       )}
       <View style={styles.productMeta}>
-        <AppText style={styles.productName} numberOfLines={1}>
+        <AppText style={[styles.productName, { color: themeColors.text1 }]} numberOfLines={1}>
           {item.name}
         </AppText>
-        <AppText style={styles.productPrice}>COP{Number(item.priceFrom ?? 0).toLocaleString('es-CO')}</AppText>
-        <View style={[styles.stockPill, isAvailable ? styles.stockPillOk : styles.stockPillOut]}>
-          <AppText style={isAvailable ? styles.stockTextOk : styles.stockTextOut}>
-            {isAvailable ? '◌ Dispo' : '⨯ Agotado'}
-          </AppText>
+        <AppText style={[styles.productPrice, { color: themeColors.text1 }]}>
+          COP{Number(item.priceFrom ?? 0).toLocaleString('es-CO')}
+        </AppText>
+        <View
+          style={[
+            styles.stockPill,
+            isAvailable
+              ? [styles.stockPillOk, !isDark && { borderColor: 'rgba(40,179,130,0.55)', backgroundColor: 'rgba(40,179,130,0.14)' }]
+              : [styles.stockPillOut, !isDark && { borderColor: 'rgba(184,72,72,0.55)', backgroundColor: 'rgba(184,72,72,0.12)' }]
+          ]}
+        >
+          <View style={styles.stockInline}>
+            <AppIcon name={isAvailable ? 'check-circle' : 'x-circle'} color={isAvailable ? (isDark ? '#cfe7d9' : '#1c5a44') : (isDark ? '#f0c0c0' : '#7d3030')} size={13} />
+            <AppText style={isAvailable ? [styles.stockTextOk, !isDark && { color: '#1c5a44' }] : [styles.stockTextOut, !isDark && { color: '#7d3030' }]}>
+              {isAvailable ? 'Dispo' : 'Agotado'}
+            </AppText>
+          </View>
         </View>
       </View>
     </Pressable>
@@ -59,6 +77,7 @@ const CatalogRow = React.memo(function CatalogRow({
 });
 
 export function CatalogScreen({ navigation }: Props) {
+  const { colors: themeColors, isDark } = useTheme();
   const zoneId = useAvailabilityStore((s) => s.selectedZoneId);
   const selectedZone = useAvailabilityStore((s) => s.selectedZone);
   const selectZone = useAvailabilityStore((s) => s.selectZone);
@@ -127,23 +146,28 @@ export function CatalogScreen({ navigation }: Props) {
 
   const listHeader = (
     <View style={{ gap: 16 }}>
-      <AppCard style={styles.zoneCard}>
-        <Pressable style={styles.zoneTrigger} onPress={() => setZonePickerOpen(true)}>
-          <AppText style={styles.zoneLabel}>Zona</AppText>
-          <AppText style={styles.zoneText}>
+      <AppCard style={[styles.zoneCard, { backgroundColor: themeColors.surface1, borderColor: themeColors.border1 }]}>
+        <Pressable
+          style={[styles.zoneTrigger, { borderColor: themeColors.border1, backgroundColor: isDark ? '#121815' : '#eef2ee' }]}
+          onPress={() => setZonePickerOpen(true)}
+        >
+          <AppText style={[styles.zoneLabel, { color: themeColors.text2 }]}>Zona</AppText>
+          <AppText style={[styles.zoneText, { color: themeColors.text1 }]}>
             {selectedZone?.city ? `${selectedZone.city} / ` : ''}
             {selectedZone?.name ?? 'Bello / Cabañas'}
           </AppText>
-          <AppText style={{ color: colors.text2 }}>▾</AppText>
+          <AppIcon name="chevron-down" color={themeColors.text2} size={14} />
         </Pressable>
       </AppCard>
 
-      <AppCard style={styles.searchCard}>
-        <AppText style={styles.searchIcon}>⌕</AppText>
+      <AppCard style={[styles.searchCard, { backgroundColor: isDark ? '#111714' : '#eef2ee', borderColor: themeColors.border1 }]}>
+        <View style={styles.searchIcon}>
+          <AppIcon name="search" color={themeColors.text2} size={16} />
+        </View>
         <TextInput
           placeholder="Buscar productos..."
-          placeholderTextColor={colors.text2}
-          style={styles.searchInput}
+          placeholderTextColor={themeColors.text2}
+          style={[styles.searchInput, { color: themeColors.text1 }]}
           value={query}
           onChangeText={setQuery}
         />
@@ -159,20 +183,23 @@ export function CatalogScreen({ navigation }: Props) {
           const isActive = item.slug ? categorySlug === item.slug : !categorySlug;
           return (
             <Pressable
-              style={[styles.chip, isActive && styles.chipActive]}
+              style={[
+                styles.chip,
+                { borderColor: themeColors.border1, backgroundColor: isDark ? '#0a100d' : '#f1f3f0' },
+                isActive && [styles.chipActive, { borderColor: isDark ? 'rgba(111,168,138,0.45)' : 'rgba(40,179,130,0.45)', backgroundColor: isDark ? '#103126' : '#d7eee4' }]
+              ]}
               onPress={() => setCategorySlug(item.slug)}
             >
-              <AppText style={styles.chipEmoji}>{getCategoryEmoji(item.name)}</AppText>
-              <AppText style={isActive ? styles.chipTextActive : styles.chipText}>{item.name}</AppText>
+              <AppText style={[isActive ? styles.chipTextActive : styles.chipText, { color: isActive ? themeColors.text1 : themeColors.text2 }]}>{item.name}</AppText>
             </Pressable>
           );
         }}
       />
 
-      <View style={styles.filtersDivider} />
+      <View style={[styles.filtersDivider, { backgroundColor: themeColors.border1 }]} />
 
       {catalogQuery.isLoading ? <AppText>Cargando catalogo...</AppText> : null}
-      {catalogQuery.isError ? <AppText style={{ color: colors.danger }}>No se pudo cargar el catalogo.</AppText> : null}
+      {catalogQuery.isError ? <AppText style={{ color: themeColors.danger }}>No se pudo cargar el catalogo.</AppText> : null}
 
       {featured ? (
         <ImageBackground
@@ -180,7 +207,7 @@ export function CatalogScreen({ navigation }: Props) {
           style={styles.featuredCard}
           imageStyle={styles.featuredImage}
         >
-          <View style={styles.featuredOverlay} />
+          <View style={[styles.featuredOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.12)' }]} />
           <View style={styles.featuredContent}>
             <AppText style={styles.featuredEyebrow}>Seleccion editorial</AppText>
             <AppText style={styles.featuredName}>{featured.name}</AppText>
@@ -194,7 +221,7 @@ export function CatalogScreen({ navigation }: Props) {
       ) : null}
 
       {!catalogQuery.isLoading && !catalogQuery.isError && products.length === 0 ? (
-        <AppCard>
+        <AppCard style={{ backgroundColor: themeColors.surface1, borderColor: themeColors.border1 }}>
           <AppText>No hay resultados para esta búsqueda/filtro.</AppText>
         </AppCard>
       ) : null}
@@ -206,7 +233,7 @@ export function CatalogScreen({ navigation }: Props) {
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: themeColors.bg }}>
       <FlatList
         data={listData}
         keyExtractor={(item) => item.id}
@@ -223,7 +250,7 @@ export function CatalogScreen({ navigation }: Props) {
 
       <Modal visible={zonePickerOpen} transparent animationType="fade" onRequestClose={() => setZonePickerOpen(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setZonePickerOpen(false)}>
-          <Pressable style={styles.modalCard} onPress={() => {}}>
+          <Pressable style={[styles.modalCard, { backgroundColor: themeColors.surface1, borderColor: themeColors.border1 }]} onPress={() => {}}>
             <AppText variant="heading">Selecciona tu zona</AppText>
             <View style={styles.zoneOptions}>
               {zones.map((zone) => {
@@ -299,9 +326,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#111714'
   },
   searchIcon: {
-    marginLeft: 4,
-    color: colors.text2,
-    fontSize: 18
+    marginLeft: 4
   },
   searchInput: {
     flex: 1,
@@ -315,7 +340,6 @@ const styles = StyleSheet.create({
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
     paddingHorizontal: 14,
     height: 36,
     borderRadius: 18,
@@ -326,9 +350,6 @@ const styles = StyleSheet.create({
   chipActive: {
     backgroundColor: '#103126',
     borderColor: 'rgba(111,168,138,0.45)'
-  },
-  chipEmoji: {
-    fontSize: 14
   },
   chipText: {
     color: colors.text2,
@@ -415,6 +436,11 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderWidth: 1
   },
+  stockInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5
+  },
   stockPillOk: {
     borderColor: 'rgba(111,168,138,0.55)',
     backgroundColor: 'rgba(66,117,91,0.24)'
@@ -439,13 +465,3 @@ const styles = StyleSheet.create({
     marginTop: 2
   }
 });
-
-function getCategoryEmoji(name: string): string {
-  const normalized = name.toLowerCase();
-  if (normalized.includes('fruta')) return '🍓';
-  if (normalized.includes('aromat')) return '🌱';
-  if (normalized.includes('verd')) return '🥬';
-  if (normalized.includes('lact')) return '🥛';
-  if (normalized.includes('snack')) return '🥜';
-  return '🧺';
-}

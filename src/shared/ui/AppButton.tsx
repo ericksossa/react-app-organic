@@ -1,7 +1,8 @@
 import React from 'react';
 import { Pressable, PressableProps, StyleProp, ViewStyle } from 'react-native';
 import { AppText } from './AppText';
-import { colors, spacing } from '../theme/tokens';
+import { spacing } from '../theme/tokens';
+import { useTheme } from '../theme/useTheme';
 
 type Props = Omit<PressableProps, 'style'> & {
   title: string;
@@ -10,6 +11,7 @@ type Props = Omit<PressableProps, 'style'> & {
 };
 
 export function AppButton({ title, tone = 'primary', style, ...props }: Props) {
+  const { colors } = useTheme();
   const backgroundColor = tone === 'primary' ? colors.cta : 'transparent';
   const borderWidth = tone === 'ghost' ? 1 : 0;
 

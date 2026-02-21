@@ -11,11 +11,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AppButton } from '../../../shared/ui/AppButton';
 import { AppText } from '../../../shared/ui/AppText';
-import { colors } from '../../../shared/theme/tokens';
+import { AppIcon } from '../../../shared/ui/AppIcon';
 import { HomeStackParamList } from '../../../app/navigation/types';
 import { useAuthStore } from '../../../state/authStore';
 import { useAvailabilityStore } from '../../../state/availabilityStore';
 import { toCachedImageSource } from '../../../shared/utils/media';
+import { useTheme } from '../../../shared/theme/useTheme';
 
 const HERO_IMAGE =
   'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=1400&q=80';
@@ -48,84 +49,56 @@ const CURATED_IMAGE =
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'HomeMain'>;
 
-type TopIconName = 'sun' | 'bookmark' | 'share' | 'search' | 'exit';
+type TopIconName = 'sun' | 'moon' | 'bookmark' | 'share' | 'search' | 'exit';
 
-function TopActionIcon({ name }: { name: TopIconName }) {
-  if (name === 'sun') {
-    return (
-      <View style={styles.iconCanvas}>
-        <View style={styles.sunCore} />
-        <View style={[styles.sunRay, styles.sunRayTop]} />
-        <View style={[styles.sunRay, styles.sunRayBottom]} />
-        <View style={[styles.sunRay, styles.sunRayLeft]} />
-        <View style={[styles.sunRay, styles.sunRayRight]} />
-      </View>
-    );
-  }
+function TopActionIcon({ name, color }: { name: TopIconName; color: string }) {
+  const iconName =
+    name === 'sun'
+      ? 'sun'
+      : name === 'moon'
+        ? 'moon'
+        : name === 'bookmark'
+          ? 'bookmark'
+          : name === 'share'
+            ? 'share'
+            : name === 'search'
+              ? 'search'
+              : 'logout';
 
-  if (name === 'bookmark') {
-    return (
-      <View style={styles.iconCanvas}>
-        <View style={styles.bookmarkBody} />
-        <View style={styles.bookmarkCut} />
-      </View>
-    );
-  }
-
-  if (name === 'share') {
-    return (
-      <View style={styles.iconCanvas}>
-        <View style={styles.shareShaft} />
-        <View style={styles.shareHeadL} />
-        <View style={styles.shareHeadR} />
-        <View style={styles.shareBase} />
-      </View>
-    );
-  }
-
-  if (name === 'search') {
-    return (
-      <View style={styles.iconCanvas}>
-        <View style={styles.searchRing} />
-        <View style={styles.searchHandle} />
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.iconCanvas}>
-      <View style={styles.exitDoor} />
-      <View style={styles.exitShaft} />
-      <View style={styles.exitHeadUp} />
-      <View style={styles.exitHeadDown} />
-    </View>
-  );
+  return <AppIcon name={iconName} color={color} size={17} />;
 }
 
 export function HomeScreen({ navigation }: Props) {
   const logout = useAuthStore((s) => s.logout);
   const selectedZone = useAvailabilityStore((s) => s.selectedZone);
+  const { mode, toggleMode, colors } = useTheme();
+  const isLight = mode === 'light';
+  const actionColor = isLight ? '#1f2421' : '#f2f6f4';
 
   return (
-    <SafeAreaView edges={['top']} style={styles.safeArea}>
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.topBar}>
-          <AppText style={styles.brand}>organico</AppText>
+    <SafeAreaView edges={['top']} style={[styles.safeArea, { backgroundColor: colors.bg }]}>
+      <ScrollView
+        style={[styles.scroll, { backgroundColor: colors.bg }]}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={[styles.topBar, { borderBottomColor: colors.border1 }]}>
+          <AppText style={[styles.brand, { color: colors.text1 }]}>organico</AppText>
           <View style={styles.topActions}>
-            <Pressable style={styles.iconButton}>
-              <TopActionIcon name="sun" />
+            <Pressable style={styles.iconButton} onPress={() => toggleMode()}>
+              <TopActionIcon name={isLight ? 'moon' : 'sun'} color={actionColor} />
             </Pressable>
             <Pressable style={styles.iconButton}>
-              <TopActionIcon name="bookmark" />
+              <TopActionIcon name="bookmark" color={actionColor} />
             </Pressable>
             <Pressable style={styles.iconButton}>
-              <TopActionIcon name="share" />
+              <TopActionIcon name="share" color={actionColor} />
             </Pressable>
             <Pressable style={styles.iconButton} onPress={() => navigation.getParent()?.navigate('CatalogTab' as never)}>
-              <TopActionIcon name="search" />
+              <TopActionIcon name="search" color={actionColor} />
             </Pressable>
             <Pressable style={styles.iconButton} onPress={() => logout()}>
-              <TopActionIcon name="exit" />
+              <TopActionIcon name="exit" color={actionColor} />
             </Pressable>
           </View>
         </View>
@@ -134,12 +107,14 @@ export function HomeScreen({ navigation }: Props) {
           <View style={styles.heroOverlay} />
           <View style={styles.heroContent}>
             <AppText style={styles.zonePill}>Zona activa: {selectedZone?.name ?? 'Bello / Cabañas'}</AppText>
-            <AppText style={styles.deliveryMeta}>Entrega estimada: <AppText style={styles.deliveryAccent}>30-60</AppText> min</AppText>
-            <AppText style={styles.heroEyebrow}>SELECCIÓN DEL EQUIPO</AppText>
-            <AppText style={styles.heroTitle}>Snacks conscientes y llenos de sabor.</AppText>
-            <AppText style={styles.heroSubtitle}>Opciones limpias para tu energía diaria, sin culpa.</AppText>
+            <AppText style={[styles.deliveryMeta, isLight && { color: '#36403a' }]}>
+              Entrega estimada: <AppText style={styles.deliveryAccent}>30-60</AppText> min
+            </AppText>
+            <AppText style={[styles.heroEyebrow, isLight && { color: '#36403a' }]}>PRODUCTORES LOCALES</AppText>
+            <AppText style={[styles.heroTitle, isLight && { color: '#141916' }]}>Historias cortas, ingredientes honestos.</AppText>
+            <AppText style={[styles.heroSubtitle, isLight && { color: '#2f3933' }]}>Compra directo a quienes cuidan la tierra.</AppText>
             <AppButton
-              title="Descubrir snacks"
+              title={isLight ? 'Ver productores' : 'Descubrir snacks'}
               onPress={() => navigation.getParent()?.navigate('CatalogTab' as never)}
               style={styles.heroCta}
             />
@@ -149,10 +124,10 @@ export function HomeScreen({ navigation }: Props) {
         <View style={styles.categoriesBlock}>
           <View style={styles.sectionTitleRow}>
             <AppText variant="heading" style={styles.sectionTitle}>
-              🧺 Descubre por categorías
+              Descubre por categorías
             </AppText>
             <Pressable onPress={() => navigation.getParent()?.navigate('CatalogTab' as never)}>
-              <AppText style={styles.sectionAction}>EXPLORAR</AppText>
+              <AppText style={[styles.sectionAction, { color: colors.text2 }]}>EXPLORAR</AppText>
             </Pressable>
           </View>
 
@@ -166,10 +141,10 @@ export function HomeScreen({ navigation }: Props) {
         <View style={styles.featuredBlock}>
           <View style={styles.sectionTitleRow}>
             <AppText variant="heading" style={styles.featuredTitle}>
-              ✨ Destacados
+              Destacados
             </AppText>
             <Pressable onPress={() => navigation.getParent()?.navigate('CatalogTab' as never)}>
-              <AppText style={styles.sectionAction}>VER CATÁLOGO</AppText>
+              <AppText style={[styles.sectionAction, { color: colors.text2 }]}>VER CATÁLOGO</AppText>
             </Pressable>
           </View>
 
@@ -247,10 +222,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center'
-  },
-  iconCanvas: {
-    width: 18,
-    height: 18
   },
   sunCore: {
     position: 'absolute',
