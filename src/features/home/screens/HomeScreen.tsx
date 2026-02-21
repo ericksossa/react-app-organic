@@ -110,7 +110,7 @@ export function HomeScreen({ navigation }: Props) {
             <AppText style={[styles.deliveryMeta, isLight && { color: '#36403a' }]}>
               Entrega estimada: <AppText style={styles.deliveryAccent}>30-60</AppText> min
             </AppText>
-            <AppText style={[styles.heroEyebrow, isLight && { color: '#36403a' }]}>PRODUCTORES LOCALES</AppText>
+            <AppText style={[styles.heroEyebrow, isLight && { color: '#36403a' }]}>🌱 PRODUCTORES LOCALES</AppText>
             <AppText style={[styles.heroTitle, isLight && { color: '#141916' }]}>Historias cortas, ingredientes honestos.</AppText>
             <AppText style={[styles.heroSubtitle, isLight && { color: '#2f3933' }]}>Compra directo a quienes cuidan la tierra.</AppText>
             <AppButton
@@ -124,7 +124,7 @@ export function HomeScreen({ navigation }: Props) {
         <View style={styles.categoriesBlock}>
           <View style={styles.sectionTitleRow}>
             <AppText variant="heading" style={styles.sectionTitle}>
-              Descubre por categorías
+              🥬 Descubre por categorías
             </AppText>
             <Pressable onPress={() => navigation.getParent()?.navigate('CatalogTab' as never)}>
               <AppText style={[styles.sectionAction, { color: colors.text2 }]}>EXPLORAR</AppText>
@@ -141,7 +141,7 @@ export function HomeScreen({ navigation }: Props) {
         <View style={styles.featuredBlock}>
           <View style={styles.sectionTitleRow}>
             <AppText variant="heading" style={styles.featuredTitle}>
-              Destacados
+              ✨ Destacados
             </AppText>
             <Pressable onPress={() => navigation.getParent()?.navigate('CatalogTab' as never)}>
               <AppText style={[styles.sectionAction, { color: colors.text2 }]}>VER CATÁLOGO</AppText>
@@ -173,7 +173,7 @@ export function HomeScreen({ navigation }: Props) {
         >
           <View style={styles.curatedOverlay} />
           <View style={styles.curatedContent}>
-            <AppText style={styles.curatedPill}>Curado para ti</AppText>
+            <AppText style={styles.curatedPill}>🌽 Curado para ti</AppText>
             <AppText style={styles.curatedTitle}>Historias cortas, ingredientes honestos.</AppText>
           </View>
         </ImageBackground>
