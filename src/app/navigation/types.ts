@@ -30,6 +30,11 @@ export type AppTabsParamList = {
 };
 
 export type RootStackParamList = {
+  IntroOnboarding: undefined;
+  MainTabs: undefined;
+};
+
+export type MainFlowStackParamList = {
   Auth: undefined;
   Onboarding: undefined;
   App: undefined;

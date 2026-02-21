@@ -6,35 +6,40 @@ export const linking: LinkingOptions<RootStackParamList> = {
   prefixes: [Linking.createURL('/'), 'organicapp://'],
   config: {
     screens: {
-      App: {
+      IntroOnboarding: 'intro',
+      MainTabs: {
         screens: {
-          HomeTab: {
+          App: {
             screens: {
-              OrdersMain: 'orders',
-              OrderDetail: 'orders/:id'
+              HomeTab: {
+                screens: {
+                  OrdersMain: 'orders',
+                  OrderDetail: 'orders/:id'
+                }
+              },
+              CatalogTab: {
+                screens: {
+                  ProductDetail: 'p/:slug'
+                }
+              },
+              CartTab: {
+                screens: {
+                  Checkout: 'checkout'
+                }
+              }
             }
           },
-          CatalogTab: {
+          Auth: {
             screens: {
-              ProductDetail: 'p/:slug'
+              Login: 'auth/login',
+              Register: 'auth/register'
             }
           },
-          CartTab: {
+          Onboarding: {
             screens: {
-              Checkout: 'checkout'
+              AddressOnboarding: 'onboarding/address'
             }
           }
-        }
-      },
-      Auth: {
-        screens: {
-          Login: 'auth/login',
-          Register: 'auth/register'
-        }
-      },
-      Onboarding: {
-        screens: {
-          AddressOnboarding: 'onboarding/address'
         }
       }
     }
