@@ -8,6 +8,7 @@ import {
   Pressable,
   StyleSheet,
   TextInput,
+  useWindowDimensions,
   View
 } from 'react-native';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -20,8 +21,6 @@ import { listDeliveryZones } from '../../../services/api/availabilityApi';
 import { useAvailabilityStore } from '../../../state/availabilityStore';
 import { useAuthStore } from '../../../state/authStore';
 import { DeliveryZone } from '../types';
-
-const TOTAL_STEPS = 2;
 
 type Step = 0 | 1;
 
@@ -55,6 +54,7 @@ export function AddressOnboardingScreen() {
   const [line1, setLine1] = useState('');
   const [instructions, setInstructions] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const { width } = useWindowDimensions();
 
   const stepAnim = useRef(new Animated.Value(0)).current;
   const titleAnim = useRef(new Animated.Value(0)).current;
@@ -66,7 +66,7 @@ export function AddressOnboardingScreen() {
       damping: 16,
       mass: 0.7,
       stiffness: 120,
-      useNativeDriver: true
+      useNativeDriver: false
     }).start();
   }, [step, stepAnim]);
 
@@ -142,7 +142,7 @@ export function AddressOnboardingScreen() {
 
   const cardsTranslateX = stepAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, -100]
+    outputRange: [0, -(width - 32)]
   });
 
   const heroOpacity = titleAnim.interpolate({
@@ -185,6 +185,7 @@ export function AddressOnboardingScreen() {
 
   const surface = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.66)';
   const border = isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.08)';
+  const cardWidth = Math.max(width - 32, 280);
 
   return (
     <Screen scroll={false}>
@@ -228,13 +229,13 @@ export function AddressOnboardingScreen() {
           <AppText variant="title" style={styles.title}>
             Configura tu entrega
           </AppText>
-          <AppText style={[styles.subtitle, { color: colors.text2 }]}> 
+          <AppText style={[styles.subtitle, { color: colors.text2 }]}>
             {step === 0
               ? 'Primero elegimos la zona exacta para mostrarte disponibilidad real.'
               : 'Ahora agrega tu direccion para terminar la activacion en segundos.'}
           </AppText>
 
-          <View style={[styles.progressTrack, { backgroundColor: surface, borderColor: border }]}> 
+          <View style={[styles.progressTrack, { backgroundColor: surface, borderColor: border }]}>
             <Animated.View style={[styles.progressFill, { width: progressWidth }]} />
           </View>
 
@@ -248,19 +249,10 @@ export function AddressOnboardingScreen() {
           <Animated.View
             style={[
               styles.cardsRow,
-              {
-                transform: [
-                  {
-                    translateX: cardsTranslateX.interpolate({
-                      inputRange: [-100, 0],
-                      outputRange: [-(Platform.OS === 'web' ? 540 : 360), 0]
-                    })
-                  }
-                ]
-              }
+              { width: cardWidth * 2, transform: [{ translateX: cardsTranslateX }] }
             ]}
           >
-            <View style={[styles.card, { backgroundColor: surface, borderColor: border }]}> 
+            <View style={[styles.card, { width: cardWidth, backgroundColor: surface, borderColor: border }]}>
               <AppText variant="heading">Elige tu ciudad</AppText>
               <View style={styles.chipsWrap}>
                 {cities.map((item) => {
@@ -327,7 +319,7 @@ export function AddressOnboardingScreen() {
               </View>
             </View>
 
-            <View style={[styles.card, { backgroundColor: surface, borderColor: border }]}> 
+            <View style={[styles.card, { width: cardWidth, backgroundColor: surface, borderColor: border }]}>
               <AppText variant="heading">Direccion de entrega</AppText>
               <AppText style={[styles.inputLabel, { color: colors.text2 }]}>Linea principal</AppText>
               <TextInput
@@ -478,11 +470,9 @@ const styles = StyleSheet.create({
   },
   cardsRow: {
     flexDirection: 'row',
-    width: '200%',
     flex: 1
   },
   card: {
-    width: '50%',
     borderWidth: 1,
     borderRadius: 24,
     padding: 18,
