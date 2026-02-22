@@ -11,7 +11,7 @@ export function OnboardingStackNavigator() {
       <Stack.Screen
         name="AddressOnboarding"
         component={AddressOnboardingScreen}
-        options={{ title: 'Direccion inicial' }}
+        options={{ title: 'Primera dirección' }}
       />
     </Stack.Navigator>
   );

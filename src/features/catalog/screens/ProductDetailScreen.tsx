@@ -51,24 +51,24 @@ export function ProductDetailScreen({ route, navigation }: Props) {
       await addItem({ variantId: selectedVariant.id, qty: 1 });
     },
     onError: () => {
-      setError('No se pudo agregar al carrito.');
+      setError('No pudimos llevarlo a tu canasta. Intenta otra vez.');
     }
   });
 
   const heroImage = product?.media?.[0]?.url;
-  const heroBrand = (product?.brand ?? 'Origen local').toUpperCase();
+  const heroBrand = (product?.brand ?? 'De origen local').toUpperCase();
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.bg }]} edges={['top', 'bottom']}>
       {productQuery.isLoading ? (
         <View style={styles.stateWrap}>
-          <AppText>Cargando detalle...</AppText>
+          <AppText>Cargando detalles del producto...</AppText>
         </View>
       ) : null}
 
       {productQuery.isError ? (
         <View style={styles.stateWrap}>
-          <AppText style={{ color: themeColors.danger }}>No se pudo cargar el producto.</AppText>
+          <AppText style={{ color: themeColors.danger }}>No pudimos cargar este producto. Intenta de nuevo.</AppText>
         </View>
       ) : null}
 
@@ -99,12 +99,12 @@ export function ProductDetailScreen({ route, navigation }: Props) {
               <View style={styles.heroContent}>
                 <AppText style={[styles.heroEyebrow, { color: isDark ? 'rgba(241,246,243,0.86)' : '#2d3631' }]}>{heroBrand}</AppText>
                 <AppText style={[styles.heroTitle, { color: isDark ? '#f4f7f5' : '#1d2320' }]}>{product.name}</AppText>
-                <AppText style={[styles.heroMeta, { color: isDark ? '#ebf1ed' : '#2d3631' }]}>100% organico</AppText>
+                <AppText style={[styles.heroMeta, { color: isDark ? '#ebf1ed' : '#2d3631' }]}>Orgánico de origen</AppText>
               </View>
             </ImageBackground>
 
             <View style={styles.variantsSection}>
-              <AppText variant="heading">Elige una variante</AppText>
+              <AppText variant="heading">Elige tu presentación</AppText>
 
               {variants.map((variant) => {
                 const selected = selectedVariant?.id === variant.id;
@@ -132,7 +132,7 @@ export function ProductDetailScreen({ route, navigation }: Props) {
                     <View style={{ flex: 1 }}>
                       <AppText style={styles.variantName}>{variant.name}</AppText>
                       <AppText style={[styles.variantMeta, { color: themeColors.text2 }]}>
-                        COP{price.toLocaleString('es-CO')} · Disponible: 50
+                        COP{price.toLocaleString('es-CO')} · Disponible hoy
                       </AppText>
                     </View>
                     <View
@@ -173,7 +173,7 @@ export function ProductDetailScreen({ route, navigation }: Props) {
               </View>
 
               <AppButton
-                title={addMutation.isPending ? 'Agregando...' : 'Agregar'}
+                title={addMutation.isPending ? 'Llevando a tu canasta...' : 'Llévalo a mi canasta'}
                 onPress={() => addMutation.mutate()}
                 disabled={addMutation.isPending || !selectedVariant}
                 style={styles.addCta}

@@ -38,7 +38,7 @@ export function AppTabsNavigator() {
         name="HomeTab"
         component={HomeStackNavigator}
         options={{
-          title: 'Home',
+          title: 'Inicio',
           tabBarIcon: ({ color, size }) => icon('leaf', color, size)
         }}
       />
@@ -46,7 +46,7 @@ export function AppTabsNavigator() {
         name="CatalogTab"
         component={CatalogStackNavigator}
         options={{
-          title: 'Explorar',
+          title: 'Mercado',
           tabBarIcon: ({ color, size }) => icon('search', color, size)
         }}
       />
@@ -54,7 +54,7 @@ export function AppTabsNavigator() {
         name="CartTab"
         component={CartStackNavigator}
         options={{
-          title: 'Carrito',
+          title: 'Canasta',
           tabBarIcon: ({ color, size }) => icon('bag', color, size)
         }}
       />

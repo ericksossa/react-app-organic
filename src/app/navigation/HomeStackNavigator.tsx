@@ -11,8 +11,8 @@ export function HomeStackNavigator() {
   return (
     <Stack.Navigator>
       <Stack.Screen name="HomeMain" component={HomeScreen} options={{ headerShown: false }} />
-      <Stack.Screen name="OrdersMain" component={OrdersScreen} options={{ title: 'Ordenes' }} />
-      <Stack.Screen name="OrderDetail" component={OrderDetailScreen} options={{ title: 'Detalle de orden' }} />
+      <Stack.Screen name="OrdersMain" component={OrdersScreen} options={{ title: 'Pedidos' }} />
+      <Stack.Screen name="OrderDetail" component={OrderDetailScreen} options={{ title: 'Detalle del pedido' }} />
     </Stack.Navigator>
   );
 }

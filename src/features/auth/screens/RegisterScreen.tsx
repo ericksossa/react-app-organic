@@ -35,7 +35,7 @@ export function RegisterScreen({ navigation }: Props) {
       });
       setDone(true);
     } catch (nextError) {
-      setError(getErrorMessage(nextError, 'No pudimos crear tu cuenta.'));
+      setError(getErrorMessage(nextError, 'No pudimos crear tu cuenta. Intenta otra vez.'));
     } finally {
       setLoading(false);
     }
@@ -55,22 +55,22 @@ export function RegisterScreen({ navigation }: Props) {
           <View style={styles.stepperRow}>
             <View style={styles.stepItemLeft}>
               <View style={styles.dotActive} />
-              <AppText style={styles.stepActive}>Cuenta</AppText>
+              <AppText style={styles.stepActive}>Tu cuenta</AppText>
             </View>
             <View style={styles.stepLine} />
             <View style={styles.stepItemRight}>
               <View style={styles.dotInactive} />
-              <AppText style={styles.stepInactive}>Dirección</AppText>
+              <AppText style={styles.stepInactive}>Tu dirección</AppText>
             </View>
           </View>
 
-          <AppText style={styles.eyebrow}>REGISTRO 1/2</AppText>
+          <AppText style={styles.eyebrow}>Paso 1 de 2</AppText>
           <AppText variant="title" style={styles.title}>
-            Crear cuenta
+            Crea tu cuenta
           </AppText>
-          <AppText style={styles.subtitle}>Empieza en segundos. La dirección la configuramos después.</AppText>
+          <AppText style={styles.subtitle}>Empieza en segundos; luego afinamos tu entrega.</AppText>
 
-          <AppText style={styles.label}>Nombre completo</AppText>
+          <AppText style={styles.label}>¿Cómo te llamas?</AppText>
           <TextInput
             placeholder=""
             placeholderTextColor={colors.text2}
@@ -80,7 +80,7 @@ export function RegisterScreen({ navigation }: Props) {
             autoCapitalize="words"
           />
 
-          <AppText style={styles.label}>Email</AppText>
+          <AppText style={styles.label}>Correo</AppText>
           <TextInput
             placeholder=""
             placeholderTextColor={colors.text2}
@@ -91,7 +91,7 @@ export function RegisterScreen({ navigation }: Props) {
             onChangeText={setEmail}
           />
 
-          <AppText style={styles.label}>Teléfono</AppText>
+          <AppText style={styles.label}>Celular (opcional)</AppText>
           <TextInput
             placeholder=""
             placeholderTextColor={colors.text2}
@@ -101,7 +101,7 @@ export function RegisterScreen({ navigation }: Props) {
             onChangeText={setPhone}
           />
 
-          <AppText style={styles.label}>Password</AppText>
+          <AppText style={styles.label}>Contraseña</AppText>
           <TextInput
             placeholder=""
             placeholderTextColor={colors.text2}
@@ -112,17 +112,17 @@ export function RegisterScreen({ navigation }: Props) {
           />
 
           {error ? <AppText style={styles.error}>{error}</AppText> : null}
-          {done ? <AppText style={styles.ok}>Cuenta creada. Ahora inicia sesión.</AppText> : null}
+          {done ? <AppText style={styles.ok}>Listo, tu cuenta ya está activa. Inicia sesión.</AppText> : null}
 
           <AppButton
-            title={loading ? 'Creando...' : 'Crear cuenta'}
+            title={loading ? 'Creando tu cuenta...' : 'Crea tu cuenta'}
             onPress={onSubmit}
             disabled={loading}
             style={styles.cta}
           />
 
           <Pressable onPress={() => navigation.navigate('Login')}>
-            <AppText style={styles.backLink}>Ya tengo cuenta</AppText>
+            <AppText style={styles.backLink}>Ya tengo cuenta, quiero entrar</AppText>
           </Pressable>
         </View>
       </KeyboardAvoidingView>

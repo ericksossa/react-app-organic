@@ -67,7 +67,7 @@ const CatalogRow = React.memo(function CatalogRow({
           <View style={styles.stockInline}>
             <AppIcon name={isAvailable ? 'check-circle' : 'x-circle'} color={isAvailable ? (isDark ? '#cfe7d9' : '#1c5a44') : (isDark ? '#f0c0c0' : '#7d3030')} size={13} />
             <AppText style={isAvailable ? [styles.stockTextOk, !isDark && { color: '#1c5a44' }] : [styles.stockTextOut, !isDark && { color: '#7d3030' }]}>
-              {isAvailable ? 'Dispo' : 'Agotado'}
+              {isAvailable ? 'Disponible' : 'Se agotó por hoy'}
             </AppText>
           </View>
         </View>
@@ -132,7 +132,7 @@ export function CatalogScreen({ navigation }: Props) {
   const products = catalogQuery.data?.data ?? [];
   const featured = products[0];
   const listData = featured ? products.slice(1) : products;
-  const chips = [{ id: 'all', name: 'Todo', slug: undefined }, ...(categoriesQuery.data ?? [])];
+  const chips = [{ id: 'all', name: 'Todo el mercado', slug: undefined }, ...(categoriesQuery.data ?? [])];
 
   React.useEffect(() => {
     const toPrefetch = products
@@ -151,10 +151,10 @@ export function CatalogScreen({ navigation }: Props) {
           style={[styles.zoneTrigger, { borderColor: themeColors.border1, backgroundColor: isDark ? '#121815' : '#eef2ee' }]}
           onPress={() => setZonePickerOpen(true)}
         >
-          <AppText style={[styles.zoneLabel, { color: themeColors.text2 }]}>Zona</AppText>
+          <AppText style={[styles.zoneLabel, { color: themeColors.text2 }]}>Zona de entrega</AppText>
           <AppText style={[styles.zoneText, { color: themeColors.text1 }]}>
             {selectedZone?.city ? `${selectedZone.city} / ` : ''}
-            {selectedZone?.name ?? 'Bello / Cabañas'}
+            {selectedZone?.name ?? 'Elige tu zona'}
           </AppText>
           <AppIcon name="chevron-down" color={themeColors.text2} size={14} />
         </Pressable>
@@ -165,7 +165,7 @@ export function CatalogScreen({ navigation }: Props) {
           <AppIcon name="search" color={themeColors.text2} size={16} />
         </View>
         <TextInput
-          placeholder="Buscar productos..."
+          placeholder="Busca frutas, verduras o productores"
           placeholderTextColor={themeColors.text2}
           style={[styles.searchInput, { color: themeColors.text1 }]}
           value={query}
@@ -198,8 +198,8 @@ export function CatalogScreen({ navigation }: Props) {
 
       <View style={[styles.filtersDivider, { backgroundColor: themeColors.border1 }]} />
 
-      {catalogQuery.isLoading ? <AppText>Cargando catalogo...</AppText> : null}
-      {catalogQuery.isError ? <AppText style={{ color: themeColors.danger }}>No se pudo cargar el catalogo.</AppText> : null}
+      {catalogQuery.isLoading ? <AppText>Cargando productos frescos...</AppText> : null}
+      {catalogQuery.isError ? <AppText style={{ color: themeColors.danger }}>No pudimos abrir el mercado. Intenta de nuevo.</AppText> : null}
 
       {featured ? (
         <ImageBackground
@@ -209,10 +209,10 @@ export function CatalogScreen({ navigation }: Props) {
         >
           <View style={[styles.featuredOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.12)' }]} />
           <View style={styles.featuredContent}>
-            <AppText style={styles.featuredEyebrow}>Seleccion editorial</AppText>
+            <AppText style={styles.featuredEyebrow}>Selección de hoy</AppText>
             <AppText style={styles.featuredName}>{featured.name}</AppText>
             <AppButton
-              title="Agregar"
+              title="Quiero esta cosecha"
               onPress={() => navigation.navigate('ProductDetail', { slug: featured.slug })}
               style={styles.addButton}
             />
@@ -222,7 +222,7 @@ export function CatalogScreen({ navigation }: Props) {
 
       {!catalogQuery.isLoading && !catalogQuery.isError && products.length === 0 ? (
         <AppCard style={{ backgroundColor: themeColors.surface1, borderColor: themeColors.border1 }}>
-          <AppText>No hay resultados para esta búsqueda/filtro.</AppText>
+          <AppText>No encontramos coincidencias en tu zona. Prueba otro filtro.</AppText>
         </AppCard>
       ) : null}
     </View>
@@ -251,7 +251,7 @@ export function CatalogScreen({ navigation }: Props) {
       <Modal visible={zonePickerOpen} transparent animationType="fade" onRequestClose={() => setZonePickerOpen(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setZonePickerOpen(false)}>
           <Pressable style={[styles.modalCard, { backgroundColor: themeColors.surface1, borderColor: themeColors.border1 }]} onPress={() => {}}>
-            <AppText variant="heading">Selecciona tu zona</AppText>
+            <AppText variant="heading">Elige tu zona de entrega</AppText>
             <View style={styles.zoneOptions}>
               {zones.map((zone) => {
                 const isSelected = zone.id === zoneId;
@@ -268,7 +268,7 @@ export function CatalogScreen({ navigation }: Props) {
                 );
               })}
             </View>
-            <AppButton title="Cerrar" tone="ghost" onPress={() => setZonePickerOpen(false)} />
+            <AppButton title="Listo" tone="ghost" onPress={() => setZonePickerOpen(false)} />
           </Pressable>
         </Pressable>
       </Modal>

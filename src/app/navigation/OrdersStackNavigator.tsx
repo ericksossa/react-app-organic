@@ -9,8 +9,8 @@ const Stack = createNativeStackNavigator<OrdersFlowParamList>();
 export function OrdersStackNavigator() {
   return (
     <Stack.Navigator>
-      <Stack.Screen name="OrdersMain" component={OrdersScreen} options={{ title: 'Orders' }} />
-      <Stack.Screen name="OrderDetail" component={OrderDetailScreen} options={{ title: 'Order detail' }} />
+      <Stack.Screen name="OrdersMain" component={OrdersScreen} options={{ title: 'Pedidos' }} />
+      <Stack.Screen name="OrderDetail" component={OrderDetailScreen} options={{ title: 'Detalle del pedido' }} />
     </Stack.Navigator>
   );
 }

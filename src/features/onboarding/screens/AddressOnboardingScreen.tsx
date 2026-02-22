@@ -75,15 +75,15 @@ export function AddressOnboardingScreen() {
       completeAddressOnboarding();
     },
     onError: () => {
-      setError('No pudimos guardar tu direccion. Intenta nuevamente.');
+      setError('No pudimos guardar tu dirección. Inténtalo otra vez.');
     }
   });
 
   return (
     <Screen>
-      <AppText variant="title">Direccion de entrega</AppText>
+      <AppText variant="title">¿Dónde te llevamos tu pedido?</AppText>
       <AppCard>
-        <AppText variant="heading">Selecciona ciudad</AppText>
+        <AppText variant="heading">Elige tu ciudad</AppText>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
           {cities.map((item) => (
             <AppButton
@@ -100,9 +100,9 @@ export function AddressOnboardingScreen() {
       </AppCard>
 
       <AppCard>
-        <AppText variant="heading">Selecciona zona</AppText>
-        {!city ? <AppText>Primero elige una ciudad.</AppText> : null}
-        {city && filteredZones.length === 0 ? <AppText>No hay zonas disponibles para esta ciudad.</AppText> : null}
+        <AppText variant="heading">Elige tu zona de entrega</AppText>
+        {!city ? <AppText>Primero elige tu ciudad para mostrar zonas.</AppText> : null}
+        {city && filteredZones.length === 0 ? <AppText>Hoy no hay cobertura en esta ciudad. Pronto abriremos nuevas zonas.</AppText> : null}
         <View style={{ gap: 8, marginTop: 8 }}>
           {filteredZones.map((zone) => (
             <AppButton
@@ -116,16 +116,16 @@ export function AddressOnboardingScreen() {
       </AppCard>
 
       <AppCard>
-        <AppText variant="heading">Direccion</AppText>
+        <AppText variant="heading">Tu dirección</AppText>
         <TextInput
-          placeholder="Linea 1"
+          placeholder="Dirección principal"
           placeholderTextColor={colors.text2}
           style={{ color: colors.text1, borderBottomWidth: 1, borderColor: colors.border1, marginBottom: 12 }}
           value={line1}
           onChangeText={setLine1}
         />
         <TextInput
-          placeholder="Instrucciones (opcional)"
+          placeholder="Referencias de entrega (opcional)"
           placeholderTextColor={colors.text2}
           style={{ color: colors.text1, borderBottomWidth: 1, borderColor: colors.border1, marginBottom: 12 }}
           value={instructions}
@@ -133,12 +133,12 @@ export function AddressOnboardingScreen() {
         />
       </AppCard>
 
-      {zonesQuery.isLoading ? <AppText>Cargando zonas...</AppText> : null}
-      {zonesQuery.isError ? <AppText style={{ color: colors.danger }}>No pudimos cargar las zonas.</AppText> : null}
+      {zonesQuery.isLoading ? <AppText>Buscando zonas disponibles...</AppText> : null}
+      {zonesQuery.isError ? <AppText style={{ color: colors.danger }}>No logramos cargar las zonas. Intenta de nuevo.</AppText> : null}
       {error ? <AppText style={{ color: colors.danger }}>{error}</AppText> : null}
 
       <AppButton
-        title={createAddressMutation.isPending ? 'Guardando...' : 'Guardar direccion'}
+        title={createAddressMutation.isPending ? 'Guardando tu dirección...' : 'Guardar y continuar'}
         onPress={() => createAddressMutation.mutate()}
         disabled={createAddressMutation.isPending || zonesQuery.isLoading}
       />
