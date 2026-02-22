@@ -167,11 +167,8 @@ function ScrollRevealCard({
   }, [index, scrollY]);
 
   return (
-    <Animated.View
-      entering={FadeInDown.delay(index * 56).duration(340)}
-      style={[style, revealStyle]}
-    >
-      {children}
+    <Animated.View entering={FadeInDown.delay(index * 56).duration(340)} style={style}>
+      <Animated.View style={revealStyle}>{children}</Animated.View>
     </Animated.View>
   );
 }
@@ -187,7 +184,7 @@ export function HomeScreen({ navigation }: Props) {
   const [isSearchFocused, setIsSearchFocused] = React.useState(false);
   const [recentSuggestions, setRecentSuggestions] = React.useState<string[]>([]);
   const searchInputRef = React.useRef<TextInput | null>(null);
-  const scrollRef = React.useRef<ScrollView | null>(null);
+  const scrollRef = React.useRef<React.ComponentRef<typeof Animated.ScrollView> | null>(null);
   const scrollY = useSharedValue(0);
   const lastSnapTargetRef = React.useRef<number | null>(null);
   const snapTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -242,13 +239,13 @@ export function HomeScreen({ navigation }: Props) {
       const normalized = normalizeSuggestionText(value).toLowerCase();
       const initialCategorySlug = CATEGORY_SLUG_BY_LABEL[normalized];
 
-      navigation.getParent()?.navigate(
-        'CatalogTab' as never,
-        ({
+      const parentNav = navigation.getParent();
+      if (parentNav) {
+        (parentNav as any).navigate('CatalogTab', {
           screen: 'CatalogMain',
           params: value ? { initialQuery: value, initialCategorySlug } : {}
-        } as never)
-      );
+        });
+      }
     },
     [navigation, normalizeSuggestionText, persistSearchMemory, upsertRecentSuggestion]
   );

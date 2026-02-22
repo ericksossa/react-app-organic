@@ -114,7 +114,6 @@ export function OnboardingScreen({ navigation }: Props) {
             player={player}
             style={styles.heroVideo}
             contentFit="cover"
-            surfaceType="textureView"
             nativeControls={false}
             allowsFullscreen={false}
             allowsPictureInPicture={false}

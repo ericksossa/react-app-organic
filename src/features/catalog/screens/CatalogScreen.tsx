@@ -185,62 +185,66 @@ const CatalogRow = React.memo(function CatalogRow({
   return (
     <Animated.View
       entering={FadeInDown.delay((index % 8) * 46).duration(320)}
-      style={[
-        styles.productCard,
-        {
-          borderColor: highlighted
-            ? isDark
-              ? 'rgba(111,168,138,0.72)'
-              : 'rgba(40,179,130,0.72)'
-            : themeColors.border1,
-          backgroundColor: highlighted
-            ? isDark
-              ? 'rgba(16,38,30,0.94)'
-              : '#e7f6ef'
-            : isDark
-              ? '#0f1512'
-              : '#f5f7f4'
-        },
-        highlighted && styles.productCardHighlighted,
-        rowScrollStyle
-      ]}
+      style={styles.productCell}
     >
-      <Pressable onPress={() => onOpen(item.slug)}>
-        {item.imageUrl ? (
-          <Image source={toCachedImageSource(item.imageUrl)} style={styles.productImage} resizeMode="cover" />
-        ) : (
-          <View style={styles.imageFallback} />
-        )}
-        <View style={styles.productMeta}>
-          <AppText style={[styles.productName, { color: themeColors.text1 }]} numberOfLines={1}>
-            {item.name}
-          </AppText>
-          <AppText style={[styles.productPrice, { color: themeColors.text1 }]}>
-            COP{Number(item.priceFrom ?? 0).toLocaleString('es-CO')}
-          </AppText>
-          <View
-            style={[
-              styles.stockPill,
-              isAvailable
-                ? [styles.stockPillOk, !isDark && { borderColor: 'rgba(40,179,130,0.55)', backgroundColor: 'rgba(40,179,130,0.14)' }]
-                : [styles.stockPillOut, !isDark && { borderColor: 'rgba(184,72,72,0.55)', backgroundColor: 'rgba(184,72,72,0.12)' }]
-            ]}
-          >
-            <View style={styles.stockInline}>
-              <AppIcon name={isAvailable ? 'check-circle' : 'x-circle'} color={isAvailable ? (isDark ? '#cfe7d9' : '#1c5a44') : (isDark ? '#f0c0c0' : '#7d3030')} size={13} />
-              <AppText style={isAvailable ? [styles.stockTextOk, !isDark && { color: '#1c5a44' }] : [styles.stockTextOut, !isDark && { color: '#7d3030' }]}>
-                {isAvailable ? 'Dispo' : 'Agotado'}
-              </AppText>
+      <Animated.View
+        style={[
+          styles.productCard,
+          {
+            borderColor: highlighted
+              ? isDark
+                ? 'rgba(111,168,138,0.72)'
+                : 'rgba(40,179,130,0.72)'
+              : themeColors.border1,
+            backgroundColor: highlighted
+              ? isDark
+                ? 'rgba(16,38,30,0.94)'
+                : '#e7f6ef'
+              : isDark
+                ? '#0f1512'
+                : '#f5f7f4'
+          },
+          highlighted && styles.productCardHighlighted,
+          rowScrollStyle
+        ]}
+      >
+        <Pressable onPress={() => onOpen(item.slug)}>
+          {item.imageUrl ? (
+            <Image source={toCachedImageSource(item.imageUrl)} style={styles.productImage} resizeMode="cover" />
+          ) : (
+            <View style={styles.imageFallback} />
+          )}
+          <View style={styles.productMeta}>
+            <AppText style={[styles.productName, { color: themeColors.text1 }]} numberOfLines={1}>
+              {item.name}
+            </AppText>
+            <AppText style={[styles.productPrice, { color: themeColors.text1 }]}>
+              COP{Number(item.priceFrom ?? 0).toLocaleString('es-CO')}
+            </AppText>
+            <View
+              style={[
+                styles.stockPill,
+                isAvailable
+                  ? [styles.stockPillOk, !isDark && { borderColor: 'rgba(40,179,130,0.55)', backgroundColor: 'rgba(40,179,130,0.14)' }]
+                  : [styles.stockPillOut, !isDark && { borderColor: 'rgba(184,72,72,0.55)', backgroundColor: 'rgba(184,72,72,0.12)' }]
+              ]}
+            >
+              <View style={styles.stockInline}>
+                <AppIcon name={isAvailable ? 'check-circle' : 'x-circle'} color={isAvailable ? (isDark ? '#cfe7d9' : '#1c5a44') : (isDark ? '#f0c0c0' : '#7d3030')} size={13} />
+                <AppText style={isAvailable ? [styles.stockTextOk, !isDark && { color: '#1c5a44' }] : [styles.stockTextOut, !isDark && { color: '#7d3030' }]}>
+                  {isAvailable ? 'Dispo' : 'Agotado'}
+                </AppText>
+              </View>
             </View>
           </View>
-        </View>
-      </Pressable>
-      <AppButton
-        title={adding ? 'Agregando...' : 'Agregar'}
-        onPress={() => onAdd(item)}
-        disabled={adding}
-        style={styles.cardAddButton}
-      />
+        </Pressable>
+        <AppButton
+          title={adding ? 'Agregando...' : 'Agregar'}
+          onPress={() => onAdd(item)}
+          disabled={adding}
+          style={styles.cardAddButton}
+        />
+      </Animated.View>
     </Animated.View>
   );
 });
@@ -823,7 +827,7 @@ export function CatalogScreen({ navigation, route }: Props) {
         renderItem={renderItem}
         numColumns={2}
         contentContainerStyle={{ padding: 14, gap: 14 }}
-        columnWrapperStyle={{ gap: 10 }}
+        columnWrapperStyle={styles.productsColumn}
         ListHeaderComponent={listHeader}
         removeClippedSubviews
         initialNumToRender={10}
@@ -931,7 +935,6 @@ const styles = StyleSheet.create({
   zoneTrigger: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: colors.border1,
@@ -1113,6 +1116,15 @@ const styles = StyleSheet.create({
     borderColor: colors.border1,
     backgroundColor: '#0f1512',
     overflow: 'hidden'
+  },
+  productCell: {
+    flex: 1,
+    flexBasis: 0,
+    minWidth: 0
+  },
+  productsColumn: {
+    gap: 10,
+    alignItems: 'flex-start'
   },
   productCardHighlighted: {
     shadowColor: '#28b382',

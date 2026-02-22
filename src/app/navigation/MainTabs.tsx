@@ -1,5 +1,8 @@
 import React from 'react';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import {
+  BottomTabBarButtonProps,
+  createBottomTabNavigator
+} from '@react-navigation/bottom-tabs';
 import { Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppTabsParamList } from './types';
@@ -26,6 +29,14 @@ export function MainTabs() {
   const tabBorder = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)';
   const inactiveTone = isDark ? 'rgba(237,245,241,0.72)' : 'rgba(16,24,20,0.62)';
   const activeTone = isDark ? '#F6F8F7' : '#0B1712';
+  const renderTabButton = React.useCallback(
+    ({ children, ...rest }: BottomTabBarButtonProps) => (
+      <Pressable hitSlop={10} {...(rest as any)}>
+        {children}
+      </Pressable>
+    ),
+    []
+  );
 
   return (
     <Tab.Navigator
@@ -42,7 +53,7 @@ export function MainTabs() {
           paddingBottom: Math.max(insets.bottom, 10)
         },
         tabBarHideOnKeyboard: true,
-        tabBarButton: (props) => <Pressable {...props} hitSlop={10} />
+        tabBarButton: renderTabButton
       }}
     >
       <Tab.Screen
