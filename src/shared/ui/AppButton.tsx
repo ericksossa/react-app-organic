@@ -17,6 +17,7 @@ export function AppButton({ title, tone = 'primary', style, ...props }: Props) {
 
   return (
     <Pressable
+      accessibilityRole="button"
       {...props}
       style={[
         {
