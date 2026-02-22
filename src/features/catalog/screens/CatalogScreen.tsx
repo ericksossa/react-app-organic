@@ -5,6 +5,9 @@ import {
   ImageBackground,
   ListRenderItemInfo,
   Modal,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  Platform,
   Pressable,
   StyleSheet,
   TextInput,
@@ -32,6 +35,7 @@ import Animated, {
   Extrapolation,
   FadeInDown,
   interpolate,
+  SharedValue,
   runOnJS,
   useAnimatedScrollHandler,
   useAnimatedStyle,
@@ -41,6 +45,15 @@ import Animated, {
 
 type Props = NativeStackScreenProps<CatalogStackParamList, 'CatalogMain'>;
 const ZONE_SHEET_ANIM_MS = 280;
+const CATALOG_HEADER_SNAP_Y = 108;
+const CATALOG_HEADER_SNAP_THRESHOLD = 60;
+const IS_ANDROID = Platform.OS === 'android';
+const CATALOG_CARD_SHADOW_OPACITY = IS_ANDROID ? 0.12 : 0.2;
+const CATALOG_CARD_SHADOW_RADIUS = IS_ANDROID ? 9 : 14;
+const CATALOG_CARD_ELEVATION = IS_ANDROID ? 5 : 8;
+const CATALOG_SNAP_OVERSHOOT_TOP = IS_ANDROID ? 11 : 16;
+const CATALOG_SNAP_OVERSHOOT_HEADER = IS_ANDROID ? 8 : 12;
+const CATALOG_SNAP_SETTLE_MS = IS_ANDROID ? 90 : 120;
 const HOME_SEARCH_HISTORY_LIMIT = 6;
 
 type HomeSearchMemory = {
@@ -103,7 +116,8 @@ const CatalogRow = React.memo(function CatalogRow({
   onOpen,
   onAdd,
   adding,
-  highlighted
+  highlighted,
+  scrollY
 }: {
   item: CatalogProduct;
   index: number;
@@ -111,12 +125,66 @@ const CatalogRow = React.memo(function CatalogRow({
   onAdd: (product: CatalogProduct) => void;
   adding: boolean;
   highlighted: boolean;
+  scrollY: SharedValue<number>;
 }) {
   const { colors: themeColors, isDark } = useTheme();
   const isAvailable = index % 4 !== 0;
+  const rowScrollStyle = useAnimatedStyle(() => {
+    const rowIndex = Math.floor(index / 2);
+    const revealStart = rowIndex * 56;
+    const revealEnd = revealStart + 260;
+    const lateralShift = index % 2 === 0 ? -3 : 3;
+    const depthStrength = interpolate(
+      scrollY.value,
+      [0, revealStart, revealEnd],
+      [1, 1, 0.58],
+      Extrapolation.CLAMP
+    );
+
+    return {
+      transform: [
+        {
+          translateY: interpolate(
+            scrollY.value,
+            [0, revealStart, revealEnd],
+            [0, 0, -8],
+            Extrapolation.CLAMP
+          )
+        },
+        {
+          scale: interpolate(
+            scrollY.value,
+            [0, revealStart, revealEnd],
+            [1, 1, 0.987],
+            Extrapolation.CLAMP
+          )
+        },
+        {
+          translateX: interpolate(
+            scrollY.value,
+            [0, revealStart, revealEnd],
+            [0, 0, lateralShift],
+            Extrapolation.CLAMP
+          )
+        }
+      ],
+      opacity: interpolate(
+        scrollY.value,
+        [0, revealStart, revealEnd],
+        [1, 1, 0.93],
+        Extrapolation.CLAMP
+      ),
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 8 },
+      shadowRadius: CATALOG_CARD_SHADOW_RADIUS,
+      shadowOpacity: CATALOG_CARD_SHADOW_OPACITY * depthStrength,
+      elevation: CATALOG_CARD_ELEVATION * depthStrength
+    };
+  }, [index, scrollY]);
 
   return (
-    <View
+    <Animated.View
+      entering={FadeInDown.delay((index % 8) * 46).duration(320)}
       style={[
         styles.productCard,
         {
@@ -133,7 +201,8 @@ const CatalogRow = React.memo(function CatalogRow({
               ? '#0f1512'
               : '#f5f7f4'
         },
-        highlighted && styles.productCardHighlighted
+        highlighted && styles.productCardHighlighted,
+        rowScrollStyle
       ]}
     >
       <Pressable onPress={() => onOpen(item.slug)}>
@@ -172,7 +241,7 @@ const CatalogRow = React.memo(function CatalogRow({
         disabled={adding}
         style={styles.cardAddButton}
       />
-    </View>
+    </Animated.View>
   );
 });
 
@@ -192,6 +261,9 @@ export function CatalogScreen({ navigation, route }: Props) {
   const zoneSheetProgress = useSharedValue(0);
   const searchFocusProgress = useSharedValue(0);
   const catalogScrollY = useSharedValue(0);
+  const listRef = React.useRef<FlatList<CatalogProduct> | null>(null);
+  const lastHeaderSnapTargetRef = React.useRef<number | null>(null);
+  const catalogSnapTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const zonesQuery = useQuery({
     queryKey: ['delivery-zones-catalog'],
@@ -459,6 +531,47 @@ export function CatalogScreen({ navigation, route }: Props) {
     catalogScrollY.value = event.contentOffset.y;
   });
 
+  const maybeSnapCatalogHeader = React.useCallback((y: number) => {
+    if (y <= 0 || y >= CATALOG_HEADER_SNAP_Y) {
+      lastHeaderSnapTargetRef.current = null;
+      return;
+    }
+
+    const target = y < CATALOG_HEADER_SNAP_THRESHOLD ? 0 : CATALOG_HEADER_SNAP_Y;
+    if (Math.abs(y - target) < 2) {
+      lastHeaderSnapTargetRef.current = null;
+      return;
+    }
+
+    if (lastHeaderSnapTargetRef.current === target) return;
+    lastHeaderSnapTargetRef.current = target;
+
+    if (catalogSnapTimeoutRef.current) clearTimeout(catalogSnapTimeoutRef.current);
+
+    const overshoot =
+      target === 0 ? CATALOG_SNAP_OVERSHOOT_TOP : target + CATALOG_SNAP_OVERSHOOT_HEADER;
+    listRef.current?.scrollToOffset({ offset: overshoot, animated: true });
+    catalogSnapTimeoutRef.current = setTimeout(() => {
+      listRef.current?.scrollToOffset({ offset: target, animated: true });
+      lastHeaderSnapTargetRef.current = null;
+      catalogSnapTimeoutRef.current = null;
+    }, CATALOG_SNAP_SETTLE_MS);
+  }, []);
+
+  const onCatalogScrollEnd = React.useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      maybeSnapCatalogHeader(event.nativeEvent.contentOffset.y);
+    },
+    [maybeSnapCatalogHeader]
+  );
+
+  React.useEffect(
+    () => () => {
+      if (catalogSnapTimeoutRef.current) clearTimeout(catalogSnapTimeoutRef.current);
+    },
+    []
+  );
+
   const zoneCardScrollStyle = useAnimatedStyle(() => ({
     transform: [
       {
@@ -697,12 +810,14 @@ export function CatalogScreen({ navigation, route }: Props) {
       }}
       adding={addingProductId === item.id}
       highlighted={highlightedProductId === item.id}
+      scrollY={catalogScrollY}
     />
   );
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: themeColors.bg }}>
       <Animated.FlatList
+        ref={listRef}
         data={listData}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
@@ -716,6 +831,8 @@ export function CatalogScreen({ navigation, route }: Props) {
         windowSize={9}
         onScroll={onCatalogScroll}
         scrollEventThrottle={16}
+        onScrollEndDrag={onCatalogScrollEnd}
+        onMomentumScrollEnd={onCatalogScrollEnd}
       />
 
       <Modal visible={zonePickerOpen} transparent animationType="none" onRequestClose={closeZonePicker}>

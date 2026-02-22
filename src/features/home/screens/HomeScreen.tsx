@@ -2,11 +2,16 @@ import React from 'react';
 import {
   Image,
   ImageBackground,
+  NativeSyntheticEvent,
+  Platform,
   Pressable,
   ScrollView,
+  NativeScrollEvent,
+  StyleProp,
   StyleSheet,
   TextInput,
-  View
+  View,
+  ViewStyle
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -16,6 +21,7 @@ import Animated, {
   Extrapolation,
   FadeInDown,
   interpolate,
+  SharedValue,
   useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue
@@ -58,6 +64,15 @@ const FEATURED_ITEMS = [
 
 const CURATED_IMAGE =
   'https://images.unsplash.com/photo-1518173946687-a4c8892bbd9f?auto=format&fit=crop&w=1400&q=80';
+const HOME_FIRST_BLOCK_SNAP_Y = 92;
+const HOME_FIRST_BLOCK_SNAP_THRESHOLD = 52;
+const IS_ANDROID = Platform.OS === 'android';
+const HOME_CARD_SHADOW_OPACITY = IS_ANDROID ? 0.14 : 0.26;
+const HOME_CARD_SHADOW_RADIUS = IS_ANDROID ? 10 : 18;
+const HOME_CARD_ELEVATION = IS_ANDROID ? 6 : 10;
+const HOME_SNAP_OVERSHOOT_TOP = IS_ANDROID ? 10 : 14;
+const HOME_SNAP_OVERSHOOT_BLOCK = IS_ANDROID ? 6 : 10;
+const HOME_SNAP_SETTLE_MS = IS_ANDROID ? 90 : 120;
 const HOME_SEARCH_SUGGESTIONS = [
   '🍓 Frutas',
   '🥬 Verduras',
@@ -107,6 +122,60 @@ function TopActionIcon({ name, color }: { name: TopIconName; color: string }) {
   return <Feather name={iconName} color={color} size={21} />;
 }
 
+function ScrollRevealCard({
+  index,
+  scrollY,
+  style,
+  children
+}: {
+  index: number;
+  scrollY: SharedValue<number>;
+  style?: StyleProp<ViewStyle>;
+  children: React.ReactNode;
+}) {
+  const revealStyle = useAnimatedStyle(() => {
+    const revealStart = index * 42;
+    const revealEnd = revealStart + 260;
+    const depthStrength = interpolate(
+      scrollY.value,
+      [0, revealStart, revealEnd],
+      [1, 1, 0.55],
+      Extrapolation.CLAMP
+    );
+
+    return {
+      transform: [
+        {
+          translateY: interpolate(
+            scrollY.value,
+            [0, revealStart, revealEnd],
+            [0, 0, -10],
+            Extrapolation.CLAMP
+          )
+        },
+        {
+          scale: interpolate(scrollY.value, [0, revealStart, revealEnd], [1, 1, 0.986], Extrapolation.CLAMP)
+        }
+      ],
+      opacity: interpolate(scrollY.value, [0, revealStart, revealEnd], [1, 1, 0.93], Extrapolation.CLAMP),
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 10 },
+      shadowRadius: HOME_CARD_SHADOW_RADIUS,
+      shadowOpacity: HOME_CARD_SHADOW_OPACITY * depthStrength,
+      elevation: HOME_CARD_ELEVATION * depthStrength
+    };
+  }, [index, scrollY]);
+
+  return (
+    <Animated.View
+      entering={FadeInDown.delay(index * 56).duration(340)}
+      style={[style, revealStyle]}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
 export function HomeScreen({ navigation }: Props) {
   const logout = useAuthStore((s) => s.logout);
   const selectedZone = useAvailabilityStore((s) => s.selectedZone);
@@ -120,6 +189,8 @@ export function HomeScreen({ navigation }: Props) {
   const searchInputRef = React.useRef<TextInput | null>(null);
   const scrollRef = React.useRef<ScrollView | null>(null);
   const scrollY = useSharedValue(0);
+  const lastSnapTargetRef = React.useRef<number | null>(null);
+  const snapTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const normalizeSuggestionText = React.useCallback((value: string) => {
     return value.replace(/^[^\s]+\s/, '').trim();
@@ -217,6 +288,46 @@ export function HomeScreen({ navigation }: Props) {
     scrollY.value = event.contentOffset.y;
   });
 
+  const maybeSnapToFirstBlock = React.useCallback((y: number) => {
+    if (y <= 0 || y >= HOME_FIRST_BLOCK_SNAP_Y) {
+      lastSnapTargetRef.current = null;
+      return;
+    }
+
+    const target = y < HOME_FIRST_BLOCK_SNAP_THRESHOLD ? 0 : HOME_FIRST_BLOCK_SNAP_Y;
+    if (Math.abs(y - target) < 2) {
+      lastSnapTargetRef.current = null;
+      return;
+    }
+
+    if (lastSnapTargetRef.current === target) return;
+    lastSnapTargetRef.current = target;
+
+    if (snapTimeoutRef.current) clearTimeout(snapTimeoutRef.current);
+
+    const overshoot = target === 0 ? HOME_SNAP_OVERSHOOT_TOP : target + HOME_SNAP_OVERSHOOT_BLOCK;
+    scrollRef.current?.scrollTo({ y: overshoot, animated: true });
+    snapTimeoutRef.current = setTimeout(() => {
+      scrollRef.current?.scrollTo({ y: target, animated: true });
+      lastSnapTargetRef.current = null;
+      snapTimeoutRef.current = null;
+    }, HOME_SNAP_SETTLE_MS);
+  }, []);
+
+  const onHomeScrollEnd = React.useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      maybeSnapToFirstBlock(event.nativeEvent.contentOffset.y);
+    },
+    [maybeSnapToFirstBlock]
+  );
+
+  React.useEffect(
+    () => () => {
+      if (snapTimeoutRef.current) clearTimeout(snapTimeoutRef.current);
+    },
+    []
+  );
+
   const topBarScrollStyle = useAnimatedStyle(() => ({
     transform: [
       { translateY: interpolate(scrollY.value, [0, 120], [0, -8], Extrapolation.CLAMP) }
@@ -247,6 +358,8 @@ export function HomeScreen({ navigation }: Props) {
         showsVerticalScrollIndicator={false}
         onScroll={onHomeScroll}
         scrollEventThrottle={16}
+        onScrollEndDrag={onHomeScrollEnd}
+        onMomentumScrollEnd={onHomeScrollEnd}
       >
         <Animated.View style={[styles.topBar, { borderBottomColor: colors.border1 }, topBarScrollStyle]}>
           <AppText style={[styles.brand, { color: colors.text1 }]}>organico</AppText>
@@ -409,7 +522,9 @@ export function HomeScreen({ navigation }: Props) {
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoriesRow}>
             {CATEGORY_IMAGES.map((item, index) => (
-              <Image key={`${item}-${index}`} source={toCachedImageSource(item)} style={styles.categoryThumb} />
+              <ScrollRevealCard key={`${item}-${index}`} index={index + 2} scrollY={scrollY}>
+                <Image source={toCachedImageSource(item)} style={styles.categoryThumb} />
+              </ScrollRevealCard>
             ))}
           </ScrollView>
         </Animated.View>
@@ -425,34 +540,37 @@ export function HomeScreen({ navigation }: Props) {
           </View>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featuredRow}>
-            {FEATURED_ITEMS.map((item) => (
-              <ImageBackground
-                key={item.id}
-                source={toCachedImageSource(item.image)}
-                style={styles.featuredCard}
-                imageStyle={styles.featuredCardImage}
-              >
-                <View style={styles.featuredOverlay} />
-                <View style={styles.featuredContent}>
-                  <AppText style={styles.featuredEyebrow}>{item.eyebrow}</AppText>
-                  <AppText style={styles.featuredText}>{item.title}</AppText>
-                </View>
-              </ImageBackground>
+            {FEATURED_ITEMS.map((item, index) => (
+              <ScrollRevealCard key={item.id} index={index + 5} scrollY={scrollY}>
+                <ImageBackground
+                  source={toCachedImageSource(item.image)}
+                  style={styles.featuredCard}
+                  imageStyle={styles.featuredCardImage}
+                >
+                  <View style={styles.featuredOverlay} />
+                  <View style={styles.featuredContent}>
+                    <AppText style={styles.featuredEyebrow}>{item.eyebrow}</AppText>
+                    <AppText style={styles.featuredText}>{item.title}</AppText>
+                  </View>
+                </ImageBackground>
+              </ScrollRevealCard>
             ))}
           </ScrollView>
         </Animated.View>
 
-        <ImageBackground
-          source={toCachedImageSource(CURATED_IMAGE)}
-          style={styles.curatedCard}
-          imageStyle={styles.curatedImage}
-        >
-          <View style={styles.curatedOverlay} />
-          <View style={styles.curatedContent}>
-            <AppText style={styles.curatedPill}>🌽 Curado para ti</AppText>
-            <AppText style={styles.curatedTitle}>Historias cortas, ingredientes honestos.</AppText>
-          </View>
-        </ImageBackground>
+        <ScrollRevealCard index={7} scrollY={scrollY}>
+          <ImageBackground
+            source={toCachedImageSource(CURATED_IMAGE)}
+            style={styles.curatedCard}
+            imageStyle={styles.curatedImage}
+          >
+            <View style={styles.curatedOverlay} />
+            <View style={styles.curatedContent}>
+              <AppText style={styles.curatedPill}>🌽 Curado para ti</AppText>
+              <AppText style={styles.curatedTitle}>Historias cortas, ingredientes honestos.</AppText>
+            </View>
+          </ImageBackground>
+        </ScrollRevealCard>
       </Animated.ScrollView>
     </SafeAreaView>
   );
