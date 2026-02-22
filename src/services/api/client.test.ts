@@ -22,6 +22,14 @@ function response(status: number, body?: unknown): MockResponse {
   };
 }
 
+function loadApiRequest(): typeof import('./client').apiRequest {
+  let mod: typeof import('./client');
+  jest.isolateModules(() => {
+    mod = require('./client');
+  });
+  return mod!.apiRequest;
+}
+
 describe('apiRequest', () => {
   beforeEach(() => {
     jest.resetModules();
@@ -37,7 +45,7 @@ describe('apiRequest', () => {
     mockGetItem.mockResolvedValueOnce('user-1');
     (global.fetch as jest.Mock).mockResolvedValueOnce(response(200, { ok: true }));
 
-    const { apiRequest } = await import('./client');
+    const apiRequest = loadApiRequest();
 
     await apiRequest('cart/active');
 
@@ -51,7 +59,7 @@ describe('apiRequest', () => {
     mockGetItem.mockResolvedValueOnce('user-1');
     (global.fetch as jest.Mock).mockResolvedValueOnce(response(200, []));
 
-    const { apiRequest } = await import('./client');
+    const apiRequest = loadApiRequest();
 
     await apiRequest('categories');
 
@@ -69,7 +77,7 @@ describe('apiRequest', () => {
       .mockResolvedValueOnce(response(200, { accessToken: 'new-token', refreshToken: 'refresh-2' }))
       .mockResolvedValueOnce(response(200, { id: 'ok' }));
 
-    const { apiRequest } = await import('./client');
+    const apiRequest = loadApiRequest();
 
     await expect(apiRequest('orders')).resolves.toEqual({ id: 'ok' });
     expect(mockSecureStorage.setAccessToken).toHaveBeenCalledWith('new-token');
@@ -81,7 +89,7 @@ describe('apiRequest', () => {
     mockSecureStorage.getAccessToken.mockResolvedValueOnce('old-token');
     (global.fetch as jest.Mock).mockResolvedValueOnce(response(401, { message: 'bad credentials' }));
 
-    const { apiRequest } = await import('./client');
+    const apiRequest = loadApiRequest();
 
     await expect(apiRequest('auth/login', { method: 'POST', body: { email: 'a', password: 'b' } })).rejects.toMatchObject({
       status: 401,
@@ -96,7 +104,7 @@ describe('apiRequest', () => {
     mockSecureStorage.getAccessToken.mockResolvedValueOnce(null);
     (global.fetch as jest.Mock).mockResolvedValueOnce(response(204));
 
-    const { apiRequest } = await import('./client');
+    const apiRequest = loadApiRequest();
 
     await expect(apiRequest('cart/zone', { method: 'PUT', body: { zoneId: 'z1' } })).resolves.toBeUndefined();
   });
@@ -105,7 +113,7 @@ describe('apiRequest', () => {
     mockSecureStorage.getAccessToken.mockResolvedValueOnce(null);
     (global.fetch as jest.Mock).mockResolvedValueOnce(response(500, { message: 'server failed' }));
 
-    const { apiRequest } = await import('./client');
+    const apiRequest = loadApiRequest();
 
     await expect(apiRequest('products')).rejects.toMatchObject({ status: 500, message: 'server failed' });
   });

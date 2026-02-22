@@ -1,5 +1,6 @@
 import React, { PropsWithChildren } from 'react';
-import { SafeAreaView, ScrollView, ViewStyle } from 'react-native';
+import { ScrollView, ViewStyle } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { spacing } from '../theme/tokens';
 import { useTheme } from '../theme/useTheme';
 

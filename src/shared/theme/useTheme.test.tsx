@@ -1,4 +1,4 @@
-import { renderHook } from '@testing-library/react-native';
+import { act, renderHook } from '@testing-library/react-native';
 import { useThemeStore } from '../../state/themeStore';
 import { darkColors, lightColors } from './tokens';
 import { useTheme } from './useTheme';
@@ -18,7 +18,9 @@ describe('useTheme', () => {
   it('exposes toggleMode and switches to light palette', () => {
     const { result } = renderHook(() => useTheme());
 
-    result.current.toggleMode();
+    act(() => {
+      result.current.toggleMode();
+    });
 
     expect(useThemeStore.getState().mode).toBe('light');
     expect(result.current.colors).toEqual(lightColors);
