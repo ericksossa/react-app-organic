@@ -7,12 +7,8 @@ const Stack = createNativeStackNavigator<OnboardingStackParamList>();
 
 export function OnboardingStackNavigator() {
   return (
-    <Stack.Navigator>
-      <Stack.Screen
-        name="AddressOnboarding"
-        component={AddressOnboardingScreen}
-        options={{ title: 'Primera dirección' }}
-      />
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="AddressOnboarding" component={AddressOnboardingScreen} />
     </Stack.Navigator>
   );
 }
