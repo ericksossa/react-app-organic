@@ -232,14 +232,14 @@ const CatalogRow = React.memo(function CatalogRow({
               <View style={styles.stockInline}>
                 <AppIcon name={isAvailable ? 'check-circle' : 'x-circle'} color={isAvailable ? (isDark ? '#cfe7d9' : '#1c5a44') : (isDark ? '#f0c0c0' : '#7d3030')} size={13} />
                 <AppText style={isAvailable ? [styles.stockTextOk, !isDark && { color: '#1c5a44' }] : [styles.stockTextOut, !isDark && { color: '#7d3030' }]}>
-                  {isAvailable ? 'Dispo' : 'Agotado'}
+                  {isAvailable ? 'Disponible' : 'Se agotó por hoy'}
                 </AppText>
               </View>
             </View>
           </View>
         </Pressable>
         <AppButton
-          title={adding ? 'Agregando...' : 'Agregar'}
+          title={adding ? 'Llevando...' : 'Llévalo'}
           onPress={() => onAdd(item)}
           disabled={adding}
           style={styles.cardAddButton}
@@ -340,7 +340,7 @@ export function CatalogScreen({ navigation, route }: Props) {
 
         await addItem({ variantId, qty: 1 });
       } catch {
-        setAddError('No se pudo agregar este producto al carrito.');
+        setAddError('No pudimos llevar este producto a tu canasta.');
       } finally {
         setAddingProductId(null);
       }
@@ -638,11 +638,11 @@ export function CatalogScreen({ navigation, route }: Props) {
                 zoneBadgeAnimStyle
               ]}
             >
-              <AppText style={[styles.zoneBadgeText, { color: isDark ? '#d3ebdc' : '#1f6a4e' }]}>Delivery</AppText>
+              <AppText style={[styles.zoneBadgeText, { color: isDark ? '#d3ebdc' : '#1f6a4e' }]}>Zona de entrega</AppText>
             </Animated.View>
             <AppText style={[styles.zoneText, { color: themeColors.text1 }]}>
               {selectedZone?.city ? `${selectedZone.city} / ` : ''}
-              {selectedZone?.name ?? 'Bello / Cabañas'}
+              {selectedZone?.name ?? 'Elige tu zona'}
             </AppText>
             <Animated.View style={zoneChevronAnimStyle}>
               <View style={[styles.zoneChevronWrap, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]}>
@@ -705,7 +705,7 @@ export function CatalogScreen({ navigation, route }: Props) {
             </View>
           </Animated.View>
           <TextInput
-            placeholder="Busca orgánicos, marcas o categoría..."
+            placeholder="Busca frutas, verduras o productores"
             placeholderTextColor={themeColors.text2}
             style={[styles.searchInput, { color: themeColors.text1 }]}
             value={query}
@@ -772,8 +772,8 @@ export function CatalogScreen({ navigation, route }: Props) {
 
       <View style={[styles.filtersDivider, { backgroundColor: themeColors.border1 }]} />
 
-      {catalogQuery.isLoading ? <AppText>Cargando catalogo...</AppText> : null}
-      {catalogQuery.isError ? <AppText style={{ color: themeColors.danger }}>No se pudo cargar el catalogo.</AppText> : null}
+      {catalogQuery.isLoading ? <AppText>Cargando productos frescos...</AppText> : null}
+      {catalogQuery.isError ? <AppText style={{ color: themeColors.danger }}>No pudimos abrir el mercado. Intenta de nuevo.</AppText> : null}
       {addError ? <AppText style={{ color: themeColors.danger }}>{addError}</AppText> : null}
 
       {featured ? (
@@ -784,10 +784,10 @@ export function CatalogScreen({ navigation, route }: Props) {
         >
           <View style={[styles.featuredOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.12)' }]} />
           <View style={styles.featuredContent}>
-            <AppText style={styles.featuredEyebrow}>Seleccion editorial</AppText>
+            <AppText style={styles.featuredEyebrow}>Selección de hoy</AppText>
             <AppText style={styles.featuredName}>{featured.name}</AppText>
             <AppButton
-              title={addingProductId === featured.id ? 'Agregando...' : 'Agregar'}
+              title={addingProductId === featured.id ? 'Llevando...' : 'Quiero esta cosecha'}
               onPress={() => void handleAddFromCatalog(featured)}
               disabled={addingProductId === featured.id}
               style={styles.addButton}
@@ -798,7 +798,7 @@ export function CatalogScreen({ navigation, route }: Props) {
 
       {!catalogQuery.isLoading && !catalogQuery.isError && products.length === 0 ? (
         <AppCard style={{ backgroundColor: themeColors.surface1, borderColor: themeColors.border1 }}>
-          <AppText>No hay resultados para esta búsqueda/filtro.</AppText>
+          <AppText>No encontramos coincidencias en tu zona. Prueba otro filtro.</AppText>
         </AppCard>
       ) : null}
     </View>
@@ -862,9 +862,9 @@ export function CatalogScreen({ navigation, route }: Props) {
             ]}
           >
             <View style={[styles.sheetHandle, { backgroundColor: isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.16)' }]} />
-            <AppText variant="heading">Selecciona tu zona</AppText>
+            <AppText variant="heading">Elige tu zona de entrega</AppText>
             <AppText style={{ color: themeColors.text2 }}>
-              Ajustamos catálogo y tiempos de entrega según tu ubicación.
+              Ajustamos el mercado y los tiempos de entrega según tu ubicación.
             </AppText>
 
             <View style={styles.zoneOptions}>
@@ -904,7 +904,7 @@ export function CatalogScreen({ navigation, route }: Props) {
                           {zone.name}
                         </AppText>
                         <AppText style={{ color: themeColors.text2, fontSize: 12 }}>
-                          Entrega promedio 30 - 60 min
+                          Llega a tu puerta en 30 - 60 min
                         </AppText>
                       </View>
                       {isSelected ? (
@@ -919,7 +919,7 @@ export function CatalogScreen({ navigation, route }: Props) {
                 );
               })}
             </View>
-            <AppButton title="Cerrar" tone="ghost" onPress={closeZonePicker} />
+            <AppButton title="Listo" tone="ghost" onPress={closeZonePicker} />
           </Animated.View>
         </View>
       </Modal>

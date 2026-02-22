@@ -359,7 +359,7 @@ export function HomeScreen({ navigation }: Props) {
         onMomentumScrollEnd={onHomeScrollEnd}
       >
         <Animated.View style={[styles.topBar, { borderBottomColor: colors.border1 }, topBarScrollStyle]}>
-          <AppText style={[styles.brand, { color: colors.text1 }]}>organico</AppText>
+          <AppText style={[styles.brand, { color: colors.text1 }]}>GreenCart</AppText>
           <View style={styles.topActions}>
             <Pressable style={styles.iconButton} onPress={() => toggleMode()}>
               <TopActionIcon name={isLight ? 'moon' : 'sun'} color={actionColor} />
@@ -408,7 +408,7 @@ export function HomeScreen({ navigation }: Props) {
             </View>
             <TextInput
               ref={searchInputRef}
-              placeholder="Busca orgánicos en catálogo..."
+              placeholder="Busca frutas, verduras o productores"
               placeholderTextColor={colors.text2}
               style={[styles.homeSearchInput, { color: colors.text1 }]}
               value={searchQuery}
@@ -491,15 +491,15 @@ export function HomeScreen({ navigation }: Props) {
           <ImageBackground source={toCachedImageSource(HERO_IMAGE)} style={styles.hero} imageStyle={styles.heroImage}>
             <View style={styles.heroOverlay} />
             <View style={styles.heroContent}>
-              <AppText style={styles.zonePill}>Zona activa: {selectedZone?.name ?? 'Bello / Cabañas'}</AppText>
+              <AppText style={styles.zonePill}>Tu zona de hoy: {selectedZone?.name ?? 'Elige tu zona'}</AppText>
               <AppText style={[styles.deliveryMeta, isLight && { color: '#36403a' }]}>
-                Entrega estimada: <AppText style={styles.deliveryAccent}>30-60</AppText> min
+                Llega a tu puerta en <AppText style={styles.deliveryAccent}>30-60</AppText> min
               </AppText>
-              <AppText style={[styles.heroEyebrow, isLight && { color: '#36403a' }]}>🌱 PRODUCTORES LOCALES</AppText>
-              <AppText style={[styles.heroTitle, isLight && { color: '#141916' }]}>Historias cortas, ingredientes honestos.</AppText>
-              <AppText style={[styles.heroSubtitle, isLight && { color: '#2f3933' }]}>Compra directo a quienes cuidan la tierra.</AppText>
+              <AppText style={[styles.heroEyebrow, isLight && { color: '#36403a' }]}>🌱 DE MANOS LOCALES</AppText>
+              <AppText style={[styles.heroTitle, isLight && { color: '#141916' }]}>Fresco, cercano y con origen real.</AppText>
+              <AppText style={[styles.heroSubtitle, isLight && { color: '#2f3933' }]}>Compra directo a quienes cultivan con cuidado.</AppText>
               <AppButton
-                title={isLight ? 'Ver productores' : 'Descubrir snacks'}
+                title={isLight ? 'Conocer productores' : 'Ver lo que llegó hoy'}
                 onPress={() => navigation.getParent()?.navigate('CatalogTab' as never)}
                 style={styles.heroCta}
               />
@@ -510,10 +510,10 @@ export function HomeScreen({ navigation }: Props) {
         <Animated.View style={[styles.categoriesBlock, blockScrollStyle]}>
           <View style={styles.sectionTitleRow}>
             <AppText variant="heading" style={styles.sectionTitle}>
-              🥬 Descubre por categorías
+              🥬 Explora por cosecha
             </AppText>
             <Pressable onPress={() => navigation.getParent()?.navigate('CatalogTab' as never)}>
-              <AppText style={[styles.sectionAction, { color: colors.text2 }]}>EXPLORAR</AppText>
+              <AppText style={[styles.sectionAction, { color: colors.text2 }]}>Ver todo</AppText>
             </Pressable>
           </View>
 
@@ -529,10 +529,10 @@ export function HomeScreen({ navigation }: Props) {
         <Animated.View style={[styles.featuredBlock, blockScrollStyle]}>
           <View style={styles.sectionTitleRow}>
             <AppText variant="heading" style={styles.featuredTitle}>
-              ✨ Destacados
+              ✨ Recién seleccionados
             </AppText>
             <Pressable onPress={() => navigation.getParent()?.navigate('CatalogTab' as never)}>
-              <AppText style={[styles.sectionAction, { color: colors.text2 }]}>VER CATÁLOGO</AppText>
+              <AppText style={[styles.sectionAction, { color: colors.text2 }]}>Ir al mercado</AppText>
             </Pressable>
           </View>
 
@@ -563,8 +563,8 @@ export function HomeScreen({ navigation }: Props) {
           >
             <View style={styles.curatedOverlay} />
             <View style={styles.curatedContent}>
-              <AppText style={styles.curatedPill}>🌽 Curado para ti</AppText>
-              <AppText style={styles.curatedTitle}>Historias cortas, ingredientes honestos.</AppText>
+              <AppText style={styles.curatedPill}>🌽 Elegido para ti</AppText>
+              <AppText style={styles.curatedTitle}>Elegido para tu semana.</AppText>
             </View>
           </ImageBackground>
         </ScrollRevealCard>

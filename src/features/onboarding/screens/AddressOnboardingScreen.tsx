@@ -131,7 +131,7 @@ export function AddressOnboardingScreen() {
       completeAddressOnboarding();
     },
     onError: () => {
-      setError('No pudimos guardar tu direccion. Intenta nuevamente.');
+      setError('No pudimos guardar tu dirección. Inténtalo otra vez.');
     }
   });
 
@@ -170,7 +170,7 @@ export function AddressOnboardingScreen() {
 
   const handleNext = () => {
     if (!canGoNext) {
-      setError('Selecciona ciudad y zona para continuar.');
+      setError('Elige ciudad y zona para continuar.');
       return;
     }
 
@@ -231,8 +231,8 @@ export function AddressOnboardingScreen() {
           </AppText>
           <AppText style={[styles.subtitle, { color: colors.text2 }]}>
             {step === 0
-              ? 'Primero elegimos la zona exacta para mostrarte disponibilidad real.'
-              : 'Ahora agrega tu direccion para terminar la activacion en segundos.'}
+              ? 'Primero elegimos tu zona para mostrarte disponibilidad real.'
+              : 'Ahora agrega tu dirección para dejar tu entrega lista en segundos.'}
           </AppText>
 
           <View style={[styles.progressTrack, { backgroundColor: surface, borderColor: border }]}>
@@ -241,7 +241,7 @@ export function AddressOnboardingScreen() {
 
           <View style={styles.stepperRow}>
             <StepPill index={1} active={step === 0} label="Zona" isDark={isDark} />
-            <StepPill index={2} active={step === 1} label="Direccion" isDark={isDark} />
+            <StepPill index={2} active={step === 1} label="Dirección" isDark={isDark} />
           </View>
         </Animated.View>
 
@@ -280,17 +280,17 @@ export function AddressOnboardingScreen() {
               </View>
 
               <AppText variant="heading" style={styles.sectionTitle}>
-                Elige zona
+                Elige tu zona de entrega
               </AppText>
               {zonesQuery.isLoading ? (
                 <View style={styles.centerInline}>
                   <ActivityIndicator color={colors.accent} />
-                  <AppText style={{ color: colors.text2 }}>Cargando zonas...</AppText>
+                  <AppText style={{ color: colors.text2 }}>Buscando zonas disponibles...</AppText>
                 </View>
               ) : null}
-              {!city ? <AppText style={{ color: colors.text2 }}>Selecciona una ciudad primero.</AppText> : null}
+              {!city ? <AppText style={{ color: colors.text2 }}>Primero elige tu ciudad para mostrar zonas.</AppText> : null}
               {city && filteredZones.length === 0 ? (
-                <AppText style={{ color: colors.text2 }}>No hay zonas activas para esta ciudad.</AppText>
+                <AppText style={{ color: colors.text2 }}>Hoy no hay cobertura en esta ciudad. Pronto abriremos nuevas zonas.</AppText>
               ) : null}
 
               <View style={styles.zonesList}>
@@ -312,7 +312,7 @@ export function AddressOnboardingScreen() {
                       ]}
                     >
                       <AppText>{zone.name}</AppText>
-                      {selected ? <AppText style={styles.selectedTag}>Seleccionado</AppText> : null}
+                      {selected ? <AppText style={styles.selectedTag}>Elegida</AppText> : null}
                     </Pressable>
                   );
                 })}
@@ -320,8 +320,8 @@ export function AddressOnboardingScreen() {
             </View>
 
             <View style={[styles.card, { width: cardWidth, backgroundColor: surface, borderColor: border }]}>
-              <AppText variant="heading">Direccion de entrega</AppText>
-              <AppText style={[styles.inputLabel, { color: colors.text2 }]}>Linea principal</AppText>
+              <AppText variant="heading">Tu dirección</AppText>
+              <AppText style={[styles.inputLabel, { color: colors.text2 }]}>Dirección principal</AppText>
               <TextInput
                 placeholder="Ej: Calle 84 #12-33"
                 placeholderTextColor={colors.text2}
@@ -330,9 +330,9 @@ export function AddressOnboardingScreen() {
                 style={[styles.input, { color: colors.text1, borderColor: border, backgroundColor: colors.bg }]}
               />
 
-              <AppText style={[styles.inputLabel, { color: colors.text2 }]}>Indicaciones (opcional)</AppText>
+              <AppText style={[styles.inputLabel, { color: colors.text2 }]}>Referencias de entrega (opcional)</AppText>
               <TextInput
-                placeholder="Apto, torre, referencia..."
+                placeholder="Apto, torre, portería..."
                 placeholderTextColor={colors.text2}
                 value={instructions}
                 onChangeText={setInstructions}
@@ -343,15 +343,15 @@ export function AddressOnboardingScreen() {
               />
 
               <View style={[styles.summaryCard, { borderColor: border, backgroundColor: isDark ? '#0f201a' : '#dff8ef' }]}>
-                <AppText style={styles.summaryTitle}>Resumen rapido</AppText>
-                <AppText style={{ color: colors.text2 }}>{city || 'Sin ciudad seleccionada'}</AppText>
-                <AppText>{selectedZone?.name || 'Sin zona seleccionada'}</AppText>
+                <AppText style={styles.summaryTitle}>Resumen rápido</AppText>
+                <AppText style={{ color: colors.text2 }}>{city || 'Sin ciudad elegida'}</AppText>
+                <AppText>{selectedZone?.name || 'Sin zona elegida'}</AppText>
               </View>
             </View>
           </Animated.View>
         </View>
 
-        {zonesQuery.isError ? <AppText style={{ color: colors.danger }}>No pudimos cargar las zonas.</AppText> : null}
+        {zonesQuery.isError ? <AppText style={{ color: colors.danger }}>No logramos cargar las zonas. Intenta de nuevo.</AppText> : null}
         {error ? <AppText style={{ color: colors.danger }}>{error}</AppText> : null}
 
         <View style={styles.actionsRow}>
@@ -360,10 +360,10 @@ export function AddressOnboardingScreen() {
           <AppButton
             title={
               step === 0
-                ? 'Continuar'
+                ? 'Guardar y continuar'
                 : createAddressMutation.isPending
-                  ? 'Guardando...'
-                  : 'Finalizar onboarding'
+                  ? 'Guardando tu dirección...'
+                  : 'Guardar y finalizar'
             }
             onPress={step === 0 ? handleNext : () => createAddressMutation.mutate()}
             disabled={
