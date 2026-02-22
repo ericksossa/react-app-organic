@@ -12,7 +12,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Feather } from '@expo/vector-icons';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, {
+  Extrapolation,
+  FadeInDown,
+  interpolate,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useSharedValue
+} from 'react-native-reanimated';
 import { AppButton } from '../../../shared/ui/AppButton';
 import { AppText } from '../../../shared/ui/AppText';
 import { HomeStackParamList } from '../../../app/navigation/types';
@@ -112,6 +119,7 @@ export function HomeScreen({ navigation }: Props) {
   const [recentSuggestions, setRecentSuggestions] = React.useState<string[]>([]);
   const searchInputRef = React.useRef<TextInput | null>(null);
   const scrollRef = React.useRef<ScrollView | null>(null);
+  const scrollY = useSharedValue(0);
 
   const normalizeSuggestionText = React.useCallback((value: string) => {
     return value.replace(/^[^\s]+\s/, '').trim();
@@ -205,15 +213,42 @@ export function HomeScreen({ navigation }: Props) {
     }, [])
   );
 
+  const onHomeScroll = useAnimatedScrollHandler((event) => {
+    scrollY.value = event.contentOffset.y;
+  });
+
+  const topBarScrollStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: interpolate(scrollY.value, [0, 120], [0, -8], Extrapolation.CLAMP) }
+    ],
+    opacity: interpolate(scrollY.value, [0, 120], [1, 0.94], Extrapolation.CLAMP)
+  }));
+
+  const heroScrollStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: interpolate(scrollY.value, [0, 220], [0, -14], Extrapolation.CLAMP) },
+      { scale: interpolate(scrollY.value, [0, 220], [1, 1.03], Extrapolation.CLAMP) }
+    ]
+  }));
+
+  const blockScrollStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: interpolate(scrollY.value, [0, 240], [0, -6], Extrapolation.CLAMP) }
+    ],
+    opacity: interpolate(scrollY.value, [0, 300], [1, 0.96], Extrapolation.CLAMP)
+  }));
+
   return (
     <SafeAreaView edges={['top']} style={[styles.safeArea, { backgroundColor: colors.bg }]}>
-      <ScrollView
+      <Animated.ScrollView
         ref={scrollRef}
         style={[styles.scroll, { backgroundColor: colors.bg }]}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        onScroll={onHomeScroll}
+        scrollEventThrottle={16}
       >
-        <View style={[styles.topBar, { borderBottomColor: colors.border1 }]}>
+        <Animated.View style={[styles.topBar, { borderBottomColor: colors.border1 }, topBarScrollStyle]}>
           <AppText style={[styles.brand, { color: colors.text1 }]}>organico</AppText>
           <View style={styles.topActions}>
             <Pressable style={styles.iconButton} onPress={() => toggleMode()}>
@@ -232,7 +267,7 @@ export function HomeScreen({ navigation }: Props) {
               <TopActionIcon name="exit" color={actionColor} />
             </Pressable>
           </View>
-        </View>
+        </Animated.View>
 
         {isSearchVisible ? (
           <View
@@ -342,25 +377,27 @@ export function HomeScreen({ navigation }: Props) {
           </View>
         ) : null}
 
-        <ImageBackground source={toCachedImageSource(HERO_IMAGE)} style={styles.hero} imageStyle={styles.heroImage}>
-          <View style={styles.heroOverlay} />
-          <View style={styles.heroContent}>
-            <AppText style={styles.zonePill}>Zona activa: {selectedZone?.name ?? 'Bello / Cabañas'}</AppText>
-            <AppText style={[styles.deliveryMeta, isLight && { color: '#36403a' }]}>
-              Entrega estimada: <AppText style={styles.deliveryAccent}>30-60</AppText> min
-            </AppText>
-            <AppText style={[styles.heroEyebrow, isLight && { color: '#36403a' }]}>🌱 PRODUCTORES LOCALES</AppText>
-            <AppText style={[styles.heroTitle, isLight && { color: '#141916' }]}>Historias cortas, ingredientes honestos.</AppText>
-            <AppText style={[styles.heroSubtitle, isLight && { color: '#2f3933' }]}>Compra directo a quienes cuidan la tierra.</AppText>
-            <AppButton
-              title={isLight ? 'Ver productores' : 'Descubrir snacks'}
-              onPress={() => navigation.getParent()?.navigate('CatalogTab' as never)}
-              style={styles.heroCta}
-            />
-          </View>
-        </ImageBackground>
+        <Animated.View style={heroScrollStyle}>
+          <ImageBackground source={toCachedImageSource(HERO_IMAGE)} style={styles.hero} imageStyle={styles.heroImage}>
+            <View style={styles.heroOverlay} />
+            <View style={styles.heroContent}>
+              <AppText style={styles.zonePill}>Zona activa: {selectedZone?.name ?? 'Bello / Cabañas'}</AppText>
+              <AppText style={[styles.deliveryMeta, isLight && { color: '#36403a' }]}>
+                Entrega estimada: <AppText style={styles.deliveryAccent}>30-60</AppText> min
+              </AppText>
+              <AppText style={[styles.heroEyebrow, isLight && { color: '#36403a' }]}>🌱 PRODUCTORES LOCALES</AppText>
+              <AppText style={[styles.heroTitle, isLight && { color: '#141916' }]}>Historias cortas, ingredientes honestos.</AppText>
+              <AppText style={[styles.heroSubtitle, isLight && { color: '#2f3933' }]}>Compra directo a quienes cuidan la tierra.</AppText>
+              <AppButton
+                title={isLight ? 'Ver productores' : 'Descubrir snacks'}
+                onPress={() => navigation.getParent()?.navigate('CatalogTab' as never)}
+                style={styles.heroCta}
+              />
+            </View>
+          </ImageBackground>
+        </Animated.View>
 
-        <View style={styles.categoriesBlock}>
+        <Animated.View style={[styles.categoriesBlock, blockScrollStyle]}>
           <View style={styles.sectionTitleRow}>
             <AppText variant="heading" style={styles.sectionTitle}>
               🥬 Descubre por categorías
@@ -375,9 +412,9 @@ export function HomeScreen({ navigation }: Props) {
               <Image key={`${item}-${index}`} source={toCachedImageSource(item)} style={styles.categoryThumb} />
             ))}
           </ScrollView>
-        </View>
+        </Animated.View>
 
-        <View style={styles.featuredBlock}>
+        <Animated.View style={[styles.featuredBlock, blockScrollStyle]}>
           <View style={styles.sectionTitleRow}>
             <AppText variant="heading" style={styles.featuredTitle}>
               ✨ Destacados
@@ -403,7 +440,7 @@ export function HomeScreen({ navigation }: Props) {
               </ImageBackground>
             ))}
           </ScrollView>
-        </View>
+        </Animated.View>
 
         <ImageBackground
           source={toCachedImageSource(CURATED_IMAGE)}
@@ -416,7 +453,7 @@ export function HomeScreen({ navigation }: Props) {
             <AppText style={styles.curatedTitle}>Historias cortas, ingredientes honestos.</AppText>
           </View>
         </ImageBackground>
-      </ScrollView>
+      </Animated.ScrollView>
     </SafeAreaView>
   );
 }

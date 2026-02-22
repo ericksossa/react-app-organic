@@ -29,9 +29,11 @@ import { getItem, setItem } from '../../../services/storage/kvStorage';
 import { storageKeys } from '../../../config/storageKeys';
 import Animated, {
   Easing,
+  Extrapolation,
   FadeInDown,
   interpolate,
   runOnJS,
+  useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
   withTiming
@@ -189,6 +191,7 @@ export function CatalogScreen({ navigation, route }: Props) {
   const [highlightedProductId, setHighlightedProductId] = React.useState<string | null>(null);
   const zoneSheetProgress = useSharedValue(0);
   const searchFocusProgress = useSharedValue(0);
+  const catalogScrollY = useSharedValue(0);
 
   const zonesQuery = useQuery({
     queryKey: ['delivery-zones-catalog'],
@@ -240,6 +243,8 @@ export function CatalogScreen({ navigation, route }: Props) {
   const chips = [{ id: 'all', name: 'Todo', slug: undefined }, ...(categoriesQuery.data ?? [])];
   const routeInitialQuery = route.params?.initialQuery;
   const routeInitialCategorySlug = route.params?.initialCategorySlug;
+  const routeInitialProductSlug = route.params?.initialProductSlug;
+  const lastAppliedRouteSeedRef = React.useRef('');
 
   const handleAddFromCatalog = React.useCallback(
     async (product: CatalogProduct) => {
@@ -278,33 +283,44 @@ export function CatalogScreen({ navigation, route }: Props) {
   }, [products]);
 
   React.useEffect(() => {
+    const seed = `${routeInitialQuery ?? ''}|${routeInitialCategorySlug ?? ''}|${routeInitialProductSlug ?? ''}`;
+    if (seed === '||') return;
+    if (lastAppliedRouteSeedRef.current === seed) return;
+
+    lastAppliedRouteSeedRef.current = seed;
+
     if (routeInitialCategorySlug) {
-      if (categorySlug !== routeInitialCategorySlug) {
-        setCategorySlug(routeInitialCategorySlug);
-      }
+      setCategorySlug(routeInitialCategorySlug);
       setQuery('');
-      return;
+      setHighlightedProductId(null);
+    } else if (routeInitialQuery?.trim()) {
+      setQuery(routeInitialQuery.trim());
     }
 
-    const incoming = routeInitialQuery?.trim();
-    if (!incoming) return;
-    if (incoming === query) return;
-    setQuery(incoming);
-  }, [categorySlug, query, routeInitialCategorySlug, routeInitialQuery]);
+    if (routeInitialProductSlug) {
+      setCategorySlug(undefined);
+      setHighlightedProductId(routeInitialProductSlug);
+      setQuery(routeInitialProductSlug);
+    }
+
+    navigation.setParams({
+      initialQuery: undefined,
+      initialCategorySlug: undefined,
+      initialProductSlug: undefined
+    });
+  }, [navigation, routeInitialCategorySlug, routeInitialProductSlug, routeInitialQuery]);
 
   React.useEffect(() => {
-    const incoming = routeInitialQuery?.trim();
-    if (!incoming || !categoriesQuery.data?.length) return;
+    const sourceSearch = (routeInitialQuery?.trim() || query.trim());
+    if (!sourceSearch || !categoriesQuery.data?.length) return;
 
-    const normalized = normalizeSearchText(incoming);
+    const normalized = normalizeSearchText(sourceSearch);
     const match = categoriesQuery.data.find((category) => {
       const normalizedName = normalizeSearchText(category.name);
       const normalizedSlug = normalizeSearchText(category.slug);
       return (
         normalized === normalizedName ||
-        normalized === normalizedSlug ||
-        normalizedName.includes(normalized) ||
-        normalizedSlug.includes(normalized)
+        normalized === normalizedSlug
       );
     });
 
@@ -312,24 +328,24 @@ export function CatalogScreen({ navigation, route }: Props) {
     if (categorySlug !== match.slug) {
       setCategorySlug(match.slug);
     }
-    if (query) setQuery('');
+    if (query.trim()) setQuery('');
   }, [categoriesQuery.data, categorySlug, query, routeInitialQuery]);
 
   React.useEffect(() => {
-    const incoming = routeInitialQuery?.trim();
-    if (!incoming || !products.length || categorySlug) {
+    const sourceSearch = (routeInitialQuery?.trim() || query.trim());
+    if (!sourceSearch || !products.length || categorySlug) {
       setHighlightedProductId(null);
       return;
     }
 
-    const normalized = normalizeSearchText(incoming);
+    const normalized = normalizeSearchText(sourceSearch);
     const productMatch =
       products.find((product) => normalizeSearchText(product.slug) === normalized) ??
       products.find((product) => normalizeSearchText(product.name) === normalized) ??
       products.find((product) => normalizeSearchText(product.name).includes(normalized));
 
     setHighlightedProductId(productMatch?.id ?? null);
-  }, [categorySlug, products, routeInitialQuery]);
+  }, [categorySlug, products, query, routeInitialQuery]);
 
   React.useEffect(() => {
     const normalized = query.trim();
@@ -355,12 +371,16 @@ export function CatalogScreen({ navigation, route }: Props) {
   }, [query]);
 
   React.useEffect(() => {
-    const isActive = isSearchFocused || query.trim().length > 0;
+    const isActive =
+      isSearchFocused ||
+      query.trim().length > 0 ||
+      Boolean(categorySlug) ||
+      Boolean(highlightedProductId);
     searchFocusProgress.value = withTiming(isActive ? 1 : 0, {
       duration: 240,
       easing: Easing.out(Easing.cubic)
     });
-  }, [isSearchFocused, query, searchFocusProgress]);
+  }, [categorySlug, highlightedProductId, isSearchFocused, query, searchFocusProgress]);
 
   const openZonePicker = React.useCallback(() => {
     setZonePickerOpen(true);
@@ -435,9 +455,54 @@ export function CatalogScreen({ navigation, route }: Props) {
     ]
   }));
 
+  const onCatalogScroll = useAnimatedScrollHandler((event) => {
+    catalogScrollY.value = event.contentOffset.y;
+  });
+
+  const zoneCardScrollStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        translateY: interpolate(catalogScrollY.value, [0, 180], [0, -6], Extrapolation.CLAMP)
+      }
+    ],
+    opacity: interpolate(catalogScrollY.value, [0, 220], [1, 0.95], Extrapolation.CLAMP)
+  }));
+
+  const searchCardScrollStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        translateY: interpolate(catalogScrollY.value, [0, 220], [0, -8], Extrapolation.CLAMP)
+      },
+      {
+        scale: interpolate(catalogScrollY.value, [0, 260], [1, 0.992], Extrapolation.CLAMP)
+      }
+    ]
+  }));
+
+  const chipsScrollStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        translateY: interpolate(catalogScrollY.value, [0, 220], [0, -4], Extrapolation.CLAMP)
+      }
+    ],
+    opacity: interpolate(catalogScrollY.value, [0, 300], [1, 0.94], Extrapolation.CLAMP)
+  }));
+
+  const clearCatalogFilters = React.useCallback(() => {
+    setQuery('');
+    setCategorySlug(undefined);
+    setHighlightedProductId(null);
+    navigation.setParams({
+      initialQuery: undefined,
+      initialCategorySlug: undefined,
+      initialProductSlug: undefined
+    });
+  }, [navigation]);
+
   const listHeader = (
     <View style={{ gap: 16 }}>
-      <AppCard style={[styles.zoneCard, { backgroundColor: themeColors.surface1, borderColor: themeColors.border1 }]}>
+      <Animated.View style={zoneCardScrollStyle}>
+        <AppCard style={[styles.zoneCard, { backgroundColor: themeColors.surface1, borderColor: themeColors.border1 }]}>
         <Animated.View style={zoneTriggerAnimStyle}>
           <Pressable
             style={[
@@ -469,9 +534,10 @@ export function CatalogScreen({ navigation, route }: Props) {
             </Animated.View>
           </Pressable>
         </Animated.View>
-      </AppCard>
+        </AppCard>
+      </Animated.View>
 
-      <Animated.View style={searchCardAnimStyle}>
+      <Animated.View style={[searchCardAnimStyle, searchCardScrollStyle]}>
         <AppCard
           style={[
             styles.searchCard,
@@ -532,10 +598,10 @@ export function CatalogScreen({ navigation, route }: Props) {
             returnKeyType="search"
             selectionColor={isDark ? '#7bc7a2' : '#1f8d63'}
           />
-          {query.trim().length > 0 ? (
+          {query.trim().length > 0 || Boolean(categorySlug) || Boolean(highlightedProductId) ? (
             <Animated.View style={clearActionAnimStyle}>
               <Pressable
-                onPress={() => setQuery('')}
+                onPress={clearCatalogFilters}
                 style={[
                   styles.clearSearchAction,
                   {
@@ -556,7 +622,8 @@ export function CatalogScreen({ navigation, route }: Props) {
         </AppCard>
       </Animated.View>
 
-      <FlatList
+      <Animated.View style={chipsScrollStyle}>
+        <FlatList
         horizontal
         data={chips}
         keyExtractor={(item) => item.id}
@@ -572,7 +639,8 @@ export function CatalogScreen({ navigation, route }: Props) {
                 isActive && [styles.chipActive, { borderColor: isDark ? 'rgba(111,168,138,0.45)' : 'rgba(40,179,130,0.45)', backgroundColor: isDark ? '#103126' : '#d7eee4' }]
               ]}
               onPress={() => {
-                setCategorySlug(item.slug);
+                setCategorySlug(item.slug ?? undefined);
+                setQuery('');
                 setHighlightedProductId(null);
               }}
             >
@@ -582,7 +650,8 @@ export function CatalogScreen({ navigation, route }: Props) {
             </Pressable>
           );
         }}
-      />
+        />
+      </Animated.View>
 
       <View style={[styles.filtersDivider, { backgroundColor: themeColors.border1 }]} />
 
@@ -633,7 +702,7 @@ export function CatalogScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: themeColors.bg }}>
-      <FlatList
+      <Animated.FlatList
         data={listData}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
@@ -645,6 +714,8 @@ export function CatalogScreen({ navigation, route }: Props) {
         initialNumToRender={10}
         maxToRenderPerBatch={10}
         windowSize={9}
+        onScroll={onCatalogScroll}
+        scrollEventThrottle={16}
       />
 
       <Modal visible={zonePickerOpen} transparent animationType="none" onRequestClose={closeZonePicker}>
