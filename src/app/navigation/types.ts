@@ -14,7 +14,13 @@ export type HomeStackParamList = {
 };
 
 export type CatalogStackParamList = {
-  CatalogMain: undefined;
+  CatalogMain:
+    | {
+        initialQuery?: string;
+        initialCategorySlug?: string;
+        initialProductSlug?: string;
+      }
+    | undefined;
   ProductDetail: { slug: string };
 };
 
@@ -30,6 +36,11 @@ export type AppTabsParamList = {
 };
 
 export type RootStackParamList = {
+  IntroOnboarding: undefined;
+  MainTabs: undefined;
+};
+
+export type MainFlowStackParamList = {
   Auth: undefined;
   Onboarding: undefined;
   App: undefined;
