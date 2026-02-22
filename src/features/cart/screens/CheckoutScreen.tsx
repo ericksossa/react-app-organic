@@ -47,16 +47,16 @@ export function CheckoutScreen() {
     mutationFn: async () => {
       setErrorMessage(null);
       if (!selectedAddressId) {
-        throw new Error('Selecciona una dirección para continuar.');
+        throw new Error('Elige una dirección para continuar.');
       }
 
       const slotStart = toIsoOrUndefined(slotStartInput);
       const slotEnd = toIsoOrUndefined(slotEndInput);
       if ((slotStartInput.trim() && !slotStart) || (slotEndInput.trim() && !slotEnd)) {
-        throw new Error('Formato de fecha inválido. Ejemplo: 2026-03-01 14:00');
+        throw new Error('El formato de fecha no es válido. Ejemplo: 2026-03-01 14:00');
       }
       if (slotStart && slotEnd && new Date(slotStart) >= new Date(slotEnd)) {
-        throw new Error('La hora de fin debe ser mayor que la hora de inicio.');
+        throw new Error('La hora de fin debe ser mayor que la de inicio.');
       }
 
       return createOrder({
@@ -72,7 +72,7 @@ export function CheckoutScreen() {
       await loadCart();
     },
     onError: (error) => {
-      setErrorMessage(getErrorMessage(error, 'No se pudo crear la orden.'));
+      setErrorMessage(getErrorMessage(error, 'No pudimos crear tu pedido. Intenta de nuevo.'));
     }
   });
 
@@ -88,18 +88,18 @@ export function CheckoutScreen() {
 
   return (
     <Screen>
-      <AppText variant="title">Checkout</AppText>
+      <AppText variant="title">Confirma tu pedido</AppText>
 
       <AppCard style={[styles.summaryCard, { backgroundColor: themeColors.surface1, borderColor: themeColors.border1 }]}>
-        <AppText variant="heading">Resumen</AppText>
-        <AppText style={[styles.meta, { color: themeColors.text2 }]}>{itemsCount} items en tu pedido</AppText>
+        <AppText variant="heading">Resumen de tu compra</AppText>
+        <AppText style={[styles.meta, { color: themeColors.text2 }]}>{itemsCount} productos en tu pedido</AppText>
         <View style={styles.rows}>
           <View style={styles.row}>
             <AppText style={[styles.rowLabel, { color: themeColors.text2 }]}>Subtotal</AppText>
             <AppText>${Number(subtotal).toLocaleString('es-CO')}</AppText>
           </View>
           <View style={styles.row}>
-            <AppText style={[styles.rowLabel, { color: themeColors.text2 }]}>Delivery fee</AppText>
+            <AppText style={[styles.rowLabel, { color: themeColors.text2 }]}>Costo de entrega</AppText>
             <AppText>${Number(deliveryFee).toLocaleString('es-CO')}</AppText>
           </View>
           {discount > 0 ? (
@@ -118,53 +118,66 @@ export function CheckoutScreen() {
 
       <AppCard style={[styles.addressCard, { backgroundColor: themeColors.surface1, borderColor: themeColors.border1 }]}>
         <View style={styles.addressHeader}>
-          <AppText variant="heading">Dirección de entrega</AppText>
-          <AppButton title="Cambiar" tone="ghost" onPress={() => setAddressModalOpen(true)} disabled={addresses.length === 0} />
+          <AppText variant="heading">Entrega en</AppText>
+          <AppButton
+            title="Cambiar dirección"
+            tone="ghost"
+            onPress={() => setAddressModalOpen(true)}
+            disabled={addresses.length === 0}
+          />
         </View>
 
         {selectedAddress ? (
           <View style={{ gap: 4 }}>
-            <AppText style={styles.addressTitle}>{selectedAddress.label || 'Principal'}</AppText>
+            <AppText style={styles.addressTitle}>{selectedAddress.label || 'Dirección principal'}</AppText>
             <AppText>{selectedAddress.line1}{selectedAddress.city ? `, ${selectedAddress.city}` : ''}</AppText>
           </View>
         ) : (
           <View style={{ gap: 10 }}>
-              <AppText style={[styles.meta, { color: themeColors.text2 }]}>No tienes una dirección seleccionada.</AppText>
+              <AppText style={[styles.meta, { color: themeColors.text2 }]}>Aún no eliges dirección de entrega.</AppText>
             </View>
           )}
       </AppCard>
 
       <AppCard style={{ backgroundColor: themeColors.surface1, borderColor: themeColors.border1 }}>
-        <AppText variant="heading">Modo de entrega</AppText>
+        <AppText variant="heading">¿Cómo quieres recibirlo?</AppText>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-          <AppButton title="Propia" tone={deliveryMode === 'own' ? 'primary' : 'ghost'} onPress={() => setDeliveryMode('own')} />
           <AppButton
-            title="Tercero"
+            title="Entrega propia"
+            tone={deliveryMode === 'own' ? 'primary' : 'ghost'}
+            onPress={() => setDeliveryMode('own')}
+          />
+          <AppButton
+            title="Aliado logístico"
             tone={deliveryMode === 'third_party' ? 'primary' : 'ghost'}
             onPress={() => setDeliveryMode('third_party')}
           />
-          <AppButton title="Recoger" tone={deliveryMode === 'pickup' ? 'primary' : 'ghost'} onPress={() => setDeliveryMode('pickup')} />
+          <AppButton
+            title="Recoger en punto"
+            tone={deliveryMode === 'pickup' ? 'primary' : 'ghost'}
+            onPress={() => setDeliveryMode('pickup')}
+          />
         </View>
       </AppCard>
 
       <AppCard style={{ backgroundColor: themeColors.surface1, borderColor: themeColors.border1 }}>
-        <AppText variant="heading">Ventana (opcional)</AppText>
+        <AppText variant="heading">Horario de entrega (opcional)</AppText>
         <TextInput
-          placeholder="Inicio (ej: 2026-03-01 14:00)"
+          placeholder="Inicio (ej. 2026-03-01 14:00)"
           placeholderTextColor={themeColors.text2}
           style={[styles.input, { color: themeColors.text1, borderColor: themeColors.border1 }]}
           value={slotStartInput}
           onChangeText={setSlotStartInput}
         />
         <TextInput
-          placeholder="Fin (ej: 2026-03-01 16:00)"
+          placeholder="Fin (ej. 2026-03-01 16:00)"
           placeholderTextColor={themeColors.text2}
           style={[styles.input, { color: themeColors.text1, borderColor: themeColors.border1 }]}
           value={slotEndInput}
           onChangeText={setSlotEndInput}
         />
         <TextInput
-          placeholder="Nota de entrega (opcional)"
+          placeholder="Nota para quien entrega (opcional)"
           placeholderTextColor={themeColors.text2}
           style={[styles.input, { color: themeColors.text1, borderColor: themeColors.border1 }]}
           value={note}
@@ -173,10 +186,10 @@ export function CheckoutScreen() {
       </AppCard>
 
       {errorMessage ? <AppText style={[styles.errorText, { color: themeColors.danger, borderColor: themeColors.danger }]}>{errorMessage}</AppText> : null}
-      {createdOrderId ? <AppText style={{ color: '#89c8a3' }}>Orden creada: {createdOrderId}</AppText> : null}
+      {createdOrderId ? <AppText style={{ color: '#89c8a3' }}>Tu pedido quedó creado: #{createdOrderId}</AppText> : null}
 
       <AppButton
-        title={createOrderMutation.isPending ? 'Creando orden...' : 'Crear orden'}
+        title={createOrderMutation.isPending ? 'Creando tu pedido...' : 'Confirmar pedido'}
         onPress={() => createOrderMutation.mutate()}
         disabled={!selectedAddressId || createOrderMutation.isPending || itemsCount === 0}
       />
@@ -184,9 +197,9 @@ export function CheckoutScreen() {
       <Modal visible={addressModalOpen} transparent animationType="fade" onRequestClose={() => setAddressModalOpen(false)}>
         <Pressable style={[styles.modalBackdrop, { backgroundColor: isDark ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.2)' }]} onPress={() => setAddressModalOpen(false)}>
           <Pressable style={[styles.modalCard, { backgroundColor: themeColors.surface1, borderColor: themeColors.border1 }]} onPress={() => {}}>
-            <AppText variant="heading">Selecciona dirección</AppText>
-            {addressesQuery.isLoading ? <AppText>Cargando direcciones...</AppText> : null}
-            {addressesQuery.isError ? <AppText style={[styles.errorText, { color: themeColors.danger, borderColor: themeColors.danger }]}>No se pudieron cargar direcciones.</AppText> : null}
+            <AppText variant="heading">Elige una dirección</AppText>
+            {addressesQuery.isLoading ? <AppText>Cargando tus direcciones...</AppText> : null}
+            {addressesQuery.isError ? <AppText style={[styles.errorText, { color: themeColors.danger, borderColor: themeColors.danger }]}>No pudimos cargar tus direcciones. Intenta de nuevo.</AppText> : null}
             <View style={{ gap: 8 }}>
               {addresses.map((address) => (
                 <Pressable
@@ -202,14 +215,14 @@ export function CheckoutScreen() {
                   }}
                 >
                   <View style={styles.addressTop}>
-                    <AppText style={{ fontWeight: '700' }}>{address.label || 'Dirección'}</AppText>
-                    {selectedAddressId === address.id ? <AppText style={styles.activeBadge}>Activa</AppText> : null}
+                    <AppText style={{ fontWeight: '700' }}>{address.label || 'Dirección guardada'}</AppText>
+                    {selectedAddressId === address.id ? <AppText style={styles.activeBadge}>Seleccionada</AppText> : null}
                   </View>
                   <AppText>{address.line1}{address.city ? `, ${address.city}` : ''}</AppText>
                 </Pressable>
               ))}
             </View>
-            <AppButton title="Cerrar" tone="ghost" onPress={() => setAddressModalOpen(false)} />
+            <AppButton title="Listo" tone="ghost" onPress={() => setAddressModalOpen(false)} />
           </Pressable>
         </Pressable>
       </Modal>

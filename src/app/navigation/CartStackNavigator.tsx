@@ -10,7 +10,7 @@ export function CartStackNavigator() {
   return (
     <Stack.Navigator>
       <Stack.Screen name="CartMain" component={CartScreen} options={{ headerShown: false }} />
-      <Stack.Screen name="Checkout" component={CheckoutScreen} options={{ title: 'Checkout' }} />
+      <Stack.Screen name="Checkout" component={CheckoutScreen} options={{ title: 'Confirma tu pedido' }} />
     </Stack.Navigator>
   );
 }

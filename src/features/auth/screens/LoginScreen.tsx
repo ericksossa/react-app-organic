@@ -42,11 +42,11 @@ export function LoginScreen({ navigation }: Props) {
         <View style={styles.card}>
           <AppText style={styles.brand}>GREENCART</AppText>
           <AppText variant="title" style={styles.title}>
-            Inicia sesión
+            Qué bueno verte de nuevo
           </AppText>
-          <AppText style={styles.subtitle}>Compra orgánico con disponibilidad real por zona.</AppText>
+          <AppText style={styles.subtitle}>Compra fresco en tu zona, con disponibilidad real.</AppText>
 
-          <AppText style={styles.label}>Email</AppText>
+          <AppText style={styles.label}>Correo</AppText>
           <TextInput
             placeholder=""
             placeholderTextColor={colors.text2}
@@ -57,7 +57,7 @@ export function LoginScreen({ navigation }: Props) {
             onChangeText={setEmail}
           />
 
-          <AppText style={styles.label}>Password</AppText>
+          <AppText style={styles.label}>Contraseña</AppText>
           <TextInput
             placeholder=""
             placeholderTextColor={colors.text2}
@@ -70,7 +70,7 @@ export function LoginScreen({ navigation }: Props) {
           {error ? <AppText style={styles.error}>{error}</AppText> : null}
 
           <AppButton
-            title={submitting ? 'Entrando...' : 'Entrar'}
+            title={submitting ? 'Entrando a tu mercado...' : 'Entrar a GreenCart'}
             disabled={submitting}
             onPress={onSubmit}
             style={styles.cta}
@@ -78,10 +78,10 @@ export function LoginScreen({ navigation }: Props) {
 
           <View style={styles.linksRow}>
             <Pressable onPress={() => navigation.navigate('Register')}>
-              <AppText style={styles.link}>Crear cuenta</AppText>
+              <AppText style={styles.link}>Quiero crear mi cuenta</AppText>
             </Pressable>
             <Pressable>
-              <AppText style={styles.link}>Olvidé mi contraseña</AppText>
+              <AppText style={styles.link}>Necesito recuperar mi contraseña</AppText>
             </Pressable>
           </View>
         </View>

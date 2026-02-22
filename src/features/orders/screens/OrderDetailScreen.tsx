@@ -42,16 +42,16 @@ export function OrderDetailScreen({ route }: Props) {
 
       const launch = await launchPaymentRedirect(result);
       if (!launch.opened) {
-        setPaymentMessage('El proveedor no devolvio una URL de pago valida.');
+        setPaymentMessage('No recibimos un enlace de pago válido.');
         return;
       }
 
       setAwaitingPaymentReturn(true);
       const label = launch.mode === 'in_app' ? 'in-app' : 'web';
-      setPaymentMessage(`Pago inicializado. Redireccion ${label} abierta.`);
+      setPaymentMessage(`Te abrimos la pasarela de pago (${label}).`);
     },
     onError: (error) => {
-      setPaymentMessage(getErrorMessage(error, 'No se pudo iniciar el pago.'));
+      setPaymentMessage(getErrorMessage(error, 'No pudimos iniciar tu pago. Intenta otra vez.'));
     }
   });
 
@@ -86,16 +86,16 @@ export function OrderDetailScreen({ route }: Props) {
 
   return (
     <Screen contentStyle={{ paddingTop: 14, paddingBottom: 24 }}>
-      <AppText variant="title">Detalle de orden</AppText>
+      <AppText variant="title">Detalle de tu pedido</AppText>
       {orderQuery.isLoading ? (
         <AppCard style={styles.stateCard}>
-          <AppText style={{ color: colors.text2 }}>Cargando detalle...</AppText>
+          <AppText style={{ color: colors.text2 }}>Cargando tu pedido...</AppText>
         </AppCard>
       ) : null}
       {orderQuery.isError ? (
         <AppCard style={styles.stateCard}>
-          <AppText variant="heading">No pudimos cargar la orden</AppText>
-          <AppText style={{ color: colors.danger }}>Intenta nuevamente en unos segundos.</AppText>
+          <AppText variant="heading">No pudimos cargar este pedido</AppText>
+          <AppText style={{ color: colors.danger }}>Intenta de nuevo en unos segundos.</AppText>
         </AppCard>
       ) : null}
 
@@ -103,16 +103,16 @@ export function OrderDetailScreen({ route }: Props) {
         <>
           <AppCard style={styles.card}>
             <AppText variant="heading">#{order.id}</AppText>
-            <AppText style={styles.meta}>Estado: {order.status}</AppText>
+            <AppText style={styles.meta}>Estado del pedido: {order.status}</AppText>
             {order.createdAt ? (
-              <AppText style={styles.meta}>Creada: {new Date(order.createdAt).toLocaleString('es-CO')}</AppText>
+              <AppText style={styles.meta}>Creado: {new Date(order.createdAt).toLocaleString('es-CO')}</AppText>
             ) : null}
             <AppText style={styles.meta}>Total: ${Number(order.total ?? 0).toLocaleString('es-CO')}</AppText>
-            {order.deliveryMode ? <AppText style={styles.meta}>Entrega: {order.deliveryMode}</AppText> : null}
+            {order.deliveryMode ? <AppText style={styles.meta}>Método de entrega: {order.deliveryMode}</AppText> : null}
           </AppCard>
 
           <AppCard style={styles.card}>
-            <AppText variant="heading">Items</AppText>
+            <AppText variant="heading">Productos</AppText>
             <View style={styles.itemsWrap}>
               {(order.items ?? []).length > 0 ? (
                 (order.items ?? []).map((item, index) => (
@@ -123,14 +123,14 @@ export function OrderDetailScreen({ route }: Props) {
                   </View>
                 ))
               ) : (
-                <AppText style={styles.muted}>La respuesta no incluyo items.</AppText>
+                <AppText style={styles.muted}>Este pedido aún no muestra productos.</AppText>
               )}
             </View>
           </AppCard>
 
           <AppCard style={[styles.card, styles.paymentCard]}>
-            <AppText variant="heading">Pago</AppText>
-            <AppText style={styles.meta}>Inicia el pago para esta orden desde el proveedor que prefieras.</AppText>
+            <AppText variant="heading">Finaliza tu pago</AppText>
+            <AppText style={styles.meta}>Elige proveedor y completa el pago de forma segura.</AppText>
 
             <View style={styles.segmentWrap}>
               <Pressable
@@ -155,37 +155,35 @@ export function OrderDetailScreen({ route }: Props) {
             </View>
 
             <AppButton
-              title={paymentMutation.isPending ? 'Inicializando...' : 'Iniciar pago'}
+              title={paymentMutation.isPending ? 'Abriendo pago...' : 'Pagar ahora'}
               onPress={() => paymentMutation.mutate(selectedProvider)}
               disabled={paymentMutation.isPending}
             />
 
             {paymentMutation.isPending ? (
               <View style={styles.loadingState}>
-                <AppText style={{ color: colors.text2 }}>Inicializando pago...</AppText>
+                <AppText style={{ color: colors.text2 }}>Preparando tu pago...</AppText>
               </View>
             ) : null}
 
             {paymentMutation.isError ? (
               <View style={styles.errorState}>
-                <AppText style={{ color: colors.danger }}>{paymentMessage ?? 'No se pudo iniciar el pago.'}</AppText>
+                <AppText style={{ color: colors.danger }}>{paymentMessage ?? 'No pudimos iniciar tu pago. Intenta otra vez.'}</AppText>
               </View>
             ) : null}
 
             {paymentResult && !paymentMutation.isPending && !paymentMutation.isError ? (
               <View style={styles.okState}>
-                <AppText style={styles.okText}>Estado: {paymentResult.status}</AppText>
+                <AppText style={styles.okText}>Estado del pago: {paymentResult.status}</AppText>
                 {paymentResult.providerReference ? (
-                  <AppText style={styles.okText}>Referencia: {paymentResult.providerReference}</AppText>
+                  <AppText style={styles.okText}>Referencia de pago: {paymentResult.providerReference}</AppText>
                 ) : null}
                 {paymentResult.message ? <AppText style={styles.okText}>{paymentResult.message}</AppText> : null}
               </View>
             ) : null}
 
             {awaitingPaymentReturn ? (
-              <AppText style={{ color: colors.text2 }}>
-                Esperando retorno del proveedor para refrescar estado...
-              </AppText>
+              <AppText style={{ color: colors.text2 }}>Esperando confirmación del proveedor...</AppText>
             ) : null}
             {paymentMessage ? <AppText style={{ color: colors.text2 }}>{paymentMessage}</AppText> : null}
           </AppCard>

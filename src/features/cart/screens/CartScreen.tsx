@@ -114,7 +114,7 @@ export function CartScreen({ navigation }: Props) {
 
   const listHeader = (
     <View style={styles.headerWrap}>
-      {loading ? <AppText>Cargando carrito...</AppText> : null}
+      {loading ? <AppText>Actualizando tu canasta...</AppText> : null}
       {error ? <AppText style={{ color: themeColors.danger }}>{error}</AppText> : null}
       {!loading && !error && items.length === 0 ? (
         <AppCard
@@ -124,10 +124,10 @@ export function CartScreen({ navigation }: Props) {
           ]}
         >
           <AppText variant="heading" style={styles.emptyTitle}>
-            Tu carrito está vacío
+            Tu canasta está vacía por ahora
           </AppText>
           <AppText style={[styles.emptySubtitle, { color: themeColors.text2 }]}>
-            Agrega productos del catálogo para comenzar.
+            Explora el mercado y elige algo fresco para empezar.
           </AppText>
         </AppCard>
       ) : null}
@@ -143,12 +143,12 @@ export function CartScreen({ navigation }: Props) {
         ]}
       >
         <View>
-          <Text style={[styles.summaryLabel, { color: themeColors.text2 }]}>Subtotal ({items.length} items)</Text>
+          <Text style={[styles.summaryLabel, { color: themeColors.text2 }]}>Subtotal ({items.length} productos)</Text>
           <Text style={[styles.summaryPrice, { color: themeColors.text1 }]}>
             ${Number(total).toLocaleString('es-CO')}
           </Text>
         </View>
-        <AppButton title="Continuar" onPress={() => navigation.navigate('Checkout')} />
+        <AppButton title="Ir al checkout" onPress={() => navigation.navigate('Checkout')} />
       </View>
     </View>
   ) : null;
@@ -156,7 +156,7 @@ export function CartScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.bg }]}>
       <View style={styles.topHeader}>
-        <AppText style={styles.topHeaderTitle}>Carrito</AppText>
+        <AppText style={styles.topHeaderTitle}>Tu canasta</AppText>
       </View>
       <View style={[styles.topDivider, { backgroundColor: themeColors.border1 }]} />
 

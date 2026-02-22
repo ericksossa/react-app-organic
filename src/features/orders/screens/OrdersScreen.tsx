@@ -23,7 +23,7 @@ const OrderRow = React.memo(function OrderRow({
     <Pressable style={styles.orderRow} onPress={() => onOpen(order.id)}>
       <View style={{ flex: 1 }}>
         <AppText style={styles.orderId}>#{order.id}</AppText>
-        <AppText style={styles.orderMeta}>Estado: {order.status}</AppText>
+        <AppText style={styles.orderMeta}>Estado del pedido: {order.status}</AppText>
         {order.createdAt ? (
           <AppText style={styles.orderMeta}>{new Date(order.createdAt).toLocaleString('es-CO')}</AppText>
         ) : null}
@@ -51,7 +51,7 @@ export function OrdersScreen({ navigation }: Props) {
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={{ padding: 14, gap: 10, paddingBottom: 28 }}
-        ListHeaderComponent={<AppText variant="title">Mis órdenes</AppText>}
+        ListHeaderComponent={<AppText variant="title">Tus pedidos</AppText>}
         ListEmptyComponent={
           ordersQuery.isLoading ? (
             <View style={styles.skeletonWrap}>
@@ -70,16 +70,16 @@ export function OrdersScreen({ navigation }: Props) {
             </View>
           ) : ordersQuery.isError ? (
             <AppCard style={styles.stateCard}>
-              <AppText variant="heading">No pudimos cargar tus órdenes</AppText>
-              <AppText style={{ color: colors.text2 }}>Intenta nuevamente.</AppText>
-              <AppButton title="Reintentar" tone="ghost" onPress={() => ordersQuery.refetch()} />
+              <AppText variant="heading">No pudimos cargar tus pedidos</AppText>
+              <AppText style={{ color: colors.text2 }}>Vuelve a intentarlo en unos segundos.</AppText>
+              <AppButton title="Intentar de nuevo" tone="ghost" onPress={() => ordersQuery.refetch()} />
             </AppCard>
           ) : (
             <AppCard style={styles.stateCard}>
-              <AppText variant="heading">Aún no tienes órdenes</AppText>
-              <AppText style={{ color: colors.text2 }}>Crea tu primera orden desde checkout.</AppText>
+              <AppText variant="heading">Aún no tienes pedidos</AppText>
+              <AppText style={{ color: colors.text2 }}>Cuando confirmes tu primera compra, aparecerá aquí.</AppText>
               <AppButton
-                title="Ir a carrito"
+                title="Ir a mi canasta"
                 tone="ghost"
                 onPress={() => navigation.getParent()?.navigate('CartTab' as never)}
               />
