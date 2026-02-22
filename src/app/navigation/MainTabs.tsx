@@ -63,7 +63,7 @@ export function MainTabs() {
           tabBarIcon: ({ focused }) => (
             <AnimatedTabIcon
               focused={focused}
-              label="Home"
+              label="Inicio"
               icon="home"
               activeColor={activeTone}
               inactiveColor={inactiveTone}
@@ -78,7 +78,7 @@ export function MainTabs() {
           tabBarIcon: ({ focused }) => (
             <AnimatedTabIcon
               focused={focused}
-              label="Explorar"
+              label="Mercado"
               icon="explore"
               activeColor={activeTone}
               inactiveColor={inactiveTone}
@@ -93,7 +93,7 @@ export function MainTabs() {
           tabBarIcon: ({ focused }) => (
             <AnimatedTabIcon
               focused={focused}
-              label="Carrito"
+              label="Canasta"
               icon="cart"
               activeColor={activeTone}
               inactiveColor={inactiveTone}
