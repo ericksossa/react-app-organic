@@ -121,7 +121,8 @@ const CatalogRow = React.memo(function CatalogRow({
           borderColor: highlighted
             ? isDark
               ? 'rgba(111,168,138,0.72)'
-              : 'rgba(40,179,130,0.72)',
+              : 'rgba(40,179,130,0.72)'
+            : themeColors.border1,
           backgroundColor: highlighted
             ? isDark
               ? 'rgba(16,38,30,0.94)'
