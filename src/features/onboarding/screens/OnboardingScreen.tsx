@@ -1,11 +1,12 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ImageBackground,
   Pressable,
   StyleSheet,
   View
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { useEvent } from 'expo';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
@@ -21,8 +22,10 @@ import { AppText } from '../../../shared/ui/AppText';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'IntroOnboarding'>;
 
-const HERO_IMAGE =
-  'https://images.unsplash.com/photo-1518133910546-b6c2fb7d79e3?auto=format&fit=crop&w=1400&q=80';
+const PRIMARY_HERO_VIDEO =
+  'https://assets.mixkit.co/videos/preview/mixkit-farmer-holding-fresh-vegetables-5173-large.mp4';
+const FALLBACK_HERO_VIDEO =
+  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
 
 const TRANSITION_DURATION = 560;
 const HERO_SCALE_TO = 1.08;
@@ -75,6 +78,19 @@ function useOnboardingTransition(onEnd: () => void) {
 
 export function OnboardingScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
+  const [videoSource, setVideoSource] = useState(PRIMARY_HERO_VIDEO);
+  const player = useVideoPlayer(videoSource, (instance) => {
+    instance.loop = true;
+    instance.muted = true;
+    instance.play();
+  });
+  const { status } = useEvent(player, 'statusChange', { status: player.status });
+
+  useEffect(() => {
+    if (status !== 'error') return;
+    if (videoSource === FALLBACK_HERO_VIDEO) return;
+    setVideoSource(FALLBACK_HERO_VIDEO);
+  }, [status, videoSource]);
 
   const { isLocked, start, heroStyle, fadeStyle, ctaStyle } =
     useOnboardingTransition(() => {
@@ -93,7 +109,16 @@ export function OnboardingScreen({ navigation }: Props) {
           heroStyle
         ]}
       >
-        <ImageBackground source={{ uri: HERO_IMAGE }} style={styles.heroImage}>
+        <View style={styles.heroImage}>
+          <VideoView
+            player={player}
+            style={styles.heroVideo}
+            contentFit="cover"
+            surfaceType="textureView"
+            nativeControls={false}
+            allowsFullscreen={false}
+            allowsPictureInPicture={false}
+          />
           <View style={styles.heroMask} />
           <Animated.View style={[styles.heroFade, fadeStyle]} />
 
@@ -120,7 +145,7 @@ export function OnboardingScreen({ navigation }: Props) {
               <AppText style={styles.goLabel}>{isLocked ? '...' : 'Go'}</AppText>
             </Pressable>
           </Animated.View>
-        </ImageBackground>
+        </View>
       </Animated.View>
     </View>
   );
@@ -140,6 +165,9 @@ const styles = StyleSheet.create({
   heroImage: {
     flex: 1,
     justifyContent: 'space-between'
+  },
+  heroVideo: {
+    ...StyleSheet.absoluteFillObject
   },
   heroMask: {
     ...StyleSheet.absoluteFillObject,

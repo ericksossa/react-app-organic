@@ -14,7 +14,13 @@ export type HomeStackParamList = {
 };
 
 export type CatalogStackParamList = {
-  CatalogMain: undefined;
+  CatalogMain:
+    | {
+        initialQuery?: string;
+        initialCategorySlug?: string;
+        initialProductSlug?: string;
+      }
+    | undefined;
   ProductDetail: { slug: string };
 };
 

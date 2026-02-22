@@ -25,8 +25,26 @@ import { colors } from '../../../shared/theme/tokens';
 import { listDeliveryZones } from '../../../services/api/availabilityApi';
 import { toCachedImageSource } from '../../../shared/utils/media';
 import { useTheme } from '../../../shared/theme/useTheme';
+import { getItem, setItem } from '../../../services/storage/kvStorage';
+import { storageKeys } from '../../../config/storageKeys';
+import Animated, {
+  Easing,
+  FadeInDown,
+  interpolate,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming
+} from 'react-native-reanimated';
 
 type Props = NativeStackScreenProps<CatalogStackParamList, 'CatalogMain'>;
+const ZONE_SHEET_ANIM_MS = 280;
+const HOME_SEARCH_HISTORY_LIMIT = 6;
+
+type HomeSearchMemory = {
+  lastQuery: string;
+  recentSuggestions: string[];
+};
 
 const CATEGORY_EMOJI: Record<string, string> = {
   all: '✨',
@@ -69,24 +87,52 @@ function getCategoryEmoji(name: string, slug?: string): string {
   return entry?.[1] ?? '🧺';
 }
 
+function normalizeSearchText(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
 const CatalogRow = React.memo(function CatalogRow({
   item,
   index,
   onOpen,
   onAdd,
-  adding
+  adding,
+  highlighted
 }: {
   item: CatalogProduct;
   index: number;
   onOpen: (slug: string) => void;
   onAdd: (product: CatalogProduct) => void;
   adding: boolean;
+  highlighted: boolean;
 }) {
   const { colors: themeColors, isDark } = useTheme();
   const isAvailable = index % 4 !== 0;
 
   return (
-    <View style={[styles.productCard, { borderColor: themeColors.border1, backgroundColor: isDark ? '#0f1512' : '#f5f7f4' }]}>
+    <View
+      style={[
+        styles.productCard,
+        {
+          borderColor: highlighted
+            ? isDark
+              ? 'rgba(111,168,138,0.72)'
+              : 'rgba(40,179,130,0.72)',
+          backgroundColor: highlighted
+            ? isDark
+              ? 'rgba(16,38,30,0.94)'
+              : '#e7f6ef'
+            : isDark
+              ? '#0f1512'
+              : '#f5f7f4'
+        },
+        highlighted && styles.productCardHighlighted
+      ]}
+    >
       <Pressable onPress={() => onOpen(item.slug)}>
         {item.imageUrl ? (
           <Image source={toCachedImageSource(item.imageUrl)} style={styles.productImage} resizeMode="cover" />
@@ -127,17 +173,21 @@ const CatalogRow = React.memo(function CatalogRow({
   );
 });
 
-export function CatalogScreen({ navigation }: Props) {
+export function CatalogScreen({ navigation, route }: Props) {
   const { colors: themeColors, isDark } = useTheme();
   const zoneId = useAvailabilityStore((s) => s.selectedZoneId);
   const selectedZone = useAvailabilityStore((s) => s.selectedZone);
   const selectZone = useAvailabilityStore((s) => s.selectZone);
   const addItem = useCartStore((s) => s.addItem);
-  const [query, setQuery] = React.useState('');
+  const [query, setQuery] = React.useState(route.params?.initialQuery ?? '');
+  const [isSearchFocused, setIsSearchFocused] = React.useState(false);
   const [categorySlug, setCategorySlug] = React.useState<string | undefined>(undefined);
   const [zonePickerOpen, setZonePickerOpen] = React.useState(false);
   const [addingProductId, setAddingProductId] = React.useState<string | null>(null);
   const [addError, setAddError] = React.useState<string | null>(null);
+  const [highlightedProductId, setHighlightedProductId] = React.useState<string | null>(null);
+  const zoneSheetProgress = useSharedValue(0);
+  const searchFocusProgress = useSharedValue(0);
 
   const zonesQuery = useQuery({
     queryKey: ['delivery-zones-catalog'],
@@ -187,6 +237,8 @@ export function CatalogScreen({ navigation }: Props) {
   const featured = products[0];
   const listData = featured ? products.slice(1) : products;
   const chips = [{ id: 'all', name: 'Todo', slug: undefined }, ...(categoriesQuery.data ?? [])];
+  const routeInitialQuery = route.params?.initialQuery;
+  const routeInitialCategorySlug = route.params?.initialCategorySlug;
 
   const handleAddFromCatalog = React.useCallback(
     async (product: CatalogProduct) => {
@@ -224,34 +276,284 @@ export function CatalogScreen({ navigation }: Props) {
     });
   }, [products]);
 
+  React.useEffect(() => {
+    if (routeInitialCategorySlug) {
+      if (categorySlug !== routeInitialCategorySlug) {
+        setCategorySlug(routeInitialCategorySlug);
+      }
+      setQuery('');
+      return;
+    }
+
+    const incoming = routeInitialQuery?.trim();
+    if (!incoming) return;
+    if (incoming === query) return;
+    setQuery(incoming);
+  }, [categorySlug, query, routeInitialCategorySlug, routeInitialQuery]);
+
+  React.useEffect(() => {
+    const incoming = routeInitialQuery?.trim();
+    if (!incoming || !categoriesQuery.data?.length) return;
+
+    const normalized = normalizeSearchText(incoming);
+    const match = categoriesQuery.data.find((category) => {
+      const normalizedName = normalizeSearchText(category.name);
+      const normalizedSlug = normalizeSearchText(category.slug);
+      return (
+        normalized === normalizedName ||
+        normalized === normalizedSlug ||
+        normalizedName.includes(normalized) ||
+        normalizedSlug.includes(normalized)
+      );
+    });
+
+    if (!match) return;
+    if (categorySlug !== match.slug) {
+      setCategorySlug(match.slug);
+    }
+    if (query) setQuery('');
+  }, [categoriesQuery.data, categorySlug, query, routeInitialQuery]);
+
+  React.useEffect(() => {
+    const incoming = routeInitialQuery?.trim();
+    if (!incoming || !products.length || categorySlug) {
+      setHighlightedProductId(null);
+      return;
+    }
+
+    const normalized = normalizeSearchText(incoming);
+    const productMatch =
+      products.find((product) => normalizeSearchText(product.slug) === normalized) ??
+      products.find((product) => normalizeSearchText(product.name) === normalized) ??
+      products.find((product) => normalizeSearchText(product.name).includes(normalized));
+
+    setHighlightedProductId(productMatch?.id ?? null);
+  }, [categorySlug, products, routeInitialQuery]);
+
+  React.useEffect(() => {
+    const normalized = query.trim();
+    if (!normalized) return;
+
+    const syncSearchMemory = async () => {
+      const memory = await getItem<HomeSearchMemory>(storageKeys.homeSearchMemory);
+      const existing = Array.isArray(memory?.recentSuggestions)
+        ? memory.recentSuggestions
+        : [];
+      const deduped = [normalized, ...existing.filter((item) => item !== normalized)].slice(
+        0,
+        HOME_SEARCH_HISTORY_LIMIT
+      );
+
+      await setItem<HomeSearchMemory>(storageKeys.homeSearchMemory, {
+        lastQuery: normalized,
+        recentSuggestions: deduped
+      });
+    };
+
+    void syncSearchMemory();
+  }, [query]);
+
+  React.useEffect(() => {
+    const isActive = isSearchFocused || query.trim().length > 0;
+    searchFocusProgress.value = withTiming(isActive ? 1 : 0, {
+      duration: 240,
+      easing: Easing.out(Easing.cubic)
+    });
+  }, [isSearchFocused, query, searchFocusProgress]);
+
+  const openZonePicker = React.useCallback(() => {
+    setZonePickerOpen(true);
+    zoneSheetProgress.value = 0;
+    zoneSheetProgress.value = withTiming(1, {
+      duration: ZONE_SHEET_ANIM_MS,
+      easing: Easing.out(Easing.cubic)
+    });
+  }, [zoneSheetProgress]);
+
+  const closeZonePicker = React.useCallback(() => {
+    zoneSheetProgress.value = withTiming(
+      0,
+      {
+        duration: ZONE_SHEET_ANIM_MS - 40,
+        easing: Easing.inOut(Easing.cubic)
+      },
+      (finished) => {
+        if (finished) runOnJS(setZonePickerOpen)(false);
+      }
+    );
+  }, [zoneSheetProgress]);
+
+  const backdropAnimStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(zoneSheetProgress.value, [0, 1], [0, 1])
+  }));
+
+  const sheetAnimStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(zoneSheetProgress.value, [0, 1], [0, 1]),
+    transform: [
+      { translateY: interpolate(zoneSheetProgress.value, [0, 1], [36, 0]) },
+      { scale: interpolate(zoneSheetProgress.value, [0, 1], [0.97, 1]) }
+    ]
+  }));
+
+  const searchCardAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: interpolate(searchFocusProgress.value, [0, 1], [1, 1.015]) }],
+    opacity: interpolate(searchFocusProgress.value, [0, 1], [0.96, 1])
+  }));
+
+  const searchGlowAnimStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(searchFocusProgress.value, [0, 1], [0, 1]),
+    transform: [{ scale: interpolate(searchFocusProgress.value, [0, 1], [0.92, 1]) }]
+  }));
+
+  const searchIconAnimStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: interpolate(searchFocusProgress.value, [0, 1], [1, 1.08]) },
+      { translateX: interpolate(searchFocusProgress.value, [0, 1], [0, 1]) }
+    ]
+  }));
+
+  const clearActionAnimStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(searchFocusProgress.value, [0, 1], [0, 1]),
+    transform: [{ scale: interpolate(searchFocusProgress.value, [0, 1], [0.9, 1]) }]
+  }));
+
+  const zoneTriggerAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: interpolate(zoneSheetProgress.value, [0, 1], [1, 1.015]) }],
+    opacity: interpolate(zoneSheetProgress.value, [0, 1], [1, 0.98])
+  }));
+
+  const zoneBadgeAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: interpolate(zoneSheetProgress.value, [0, 1], [1, 1.06]) }],
+    opacity: interpolate(zoneSheetProgress.value, [0, 1], [0.9, 1])
+  }));
+
+  const zoneChevronAnimStyle = useAnimatedStyle(() => ({
+    transform: [
+      { rotate: `${interpolate(zoneSheetProgress.value, [0, 1], [0, 180])}deg` },
+      { scale: interpolate(zoneSheetProgress.value, [0, 1], [1, 1.06]) }
+    ]
+  }));
+
   const listHeader = (
     <View style={{ gap: 16 }}>
       <AppCard style={[styles.zoneCard, { backgroundColor: themeColors.surface1, borderColor: themeColors.border1 }]}>
-        <Pressable
-          style={[styles.zoneTrigger, { borderColor: themeColors.border1, backgroundColor: isDark ? '#121815' : '#eef2ee' }]}
-          onPress={() => setZonePickerOpen(true)}
-        >
-          <AppText style={[styles.zoneLabel, { color: themeColors.text2 }]}>Zona</AppText>
-          <AppText style={[styles.zoneText, { color: themeColors.text1 }]}>
-            {selectedZone?.city ? `${selectedZone.city} / ` : ''}
-            {selectedZone?.name ?? 'Bello / Cabañas'}
-          </AppText>
-          <AppIcon name="chevron-down" color={themeColors.text2} size={14} />
-        </Pressable>
+        <Animated.View style={zoneTriggerAnimStyle}>
+          <Pressable
+            style={[
+              styles.zoneTrigger,
+              {
+                borderColor: isDark ? 'rgba(111,168,138,0.45)' : 'rgba(40,179,130,0.35)',
+                backgroundColor: isDark ? '#10251d' : '#dcf4e9'
+              }
+            ]}
+            onPress={openZonePicker}
+          >
+            <Animated.View
+              style={[
+                styles.zoneBadge,
+                { backgroundColor: isDark ? 'rgba(111,168,138,0.2)' : 'rgba(40,179,130,0.18)' },
+                zoneBadgeAnimStyle
+              ]}
+            >
+              <AppText style={[styles.zoneBadgeText, { color: isDark ? '#d3ebdc' : '#1f6a4e' }]}>Delivery</AppText>
+            </Animated.View>
+            <AppText style={[styles.zoneText, { color: themeColors.text1 }]}>
+              {selectedZone?.city ? `${selectedZone.city} / ` : ''}
+              {selectedZone?.name ?? 'Bello / Cabañas'}
+            </AppText>
+            <Animated.View style={zoneChevronAnimStyle}>
+              <View style={[styles.zoneChevronWrap, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]}>
+                <AppIcon name="chevron-down" color={themeColors.text2} size={14} />
+              </View>
+            </Animated.View>
+          </Pressable>
+        </Animated.View>
       </AppCard>
 
-      <AppCard style={[styles.searchCard, { backgroundColor: isDark ? '#111714' : '#eef2ee', borderColor: themeColors.border1 }]}>
-        <View style={styles.searchIcon}>
-          <AppIcon name="search" color={themeColors.text2} size={16} />
-        </View>
-        <TextInput
-          placeholder="Buscar productos..."
-          placeholderTextColor={themeColors.text2}
-          style={[styles.searchInput, { color: themeColors.text1 }]}
-          value={query}
-          onChangeText={setQuery}
-        />
-      </AppCard>
+      <Animated.View style={searchCardAnimStyle}>
+        <AppCard
+          style={[
+            styles.searchCard,
+            {
+              backgroundColor: isDark ? '#101a15' : '#f1f6f2',
+              borderColor:
+                isSearchFocused || query.trim().length > 0
+                  ? isDark
+                    ? 'rgba(111,168,138,0.55)'
+                    : 'rgba(40,179,130,0.5)'
+                  : themeColors.border1
+            }
+          ]}
+        >
+          <Animated.View
+            style={[
+              styles.searchGlow,
+              {
+                backgroundColor: isDark
+                  ? 'rgba(40,179,130,0.13)'
+                  : 'rgba(40,179,130,0.12)'
+              },
+              searchGlowAnimStyle
+            ]}
+          />
+          <Animated.View style={[styles.searchIconWrap, searchIconAnimStyle]}>
+            <View
+              style={[
+                styles.searchIcon,
+                {
+                  backgroundColor: isDark
+                    ? 'rgba(255,255,255,0.06)'
+                    : 'rgba(0,0,0,0.04)'
+                }
+              ]}
+            >
+              <AppIcon
+                name="search"
+                color={
+                  isSearchFocused || query.trim().length > 0
+                    ? isDark
+                      ? '#cde7d9'
+                      : '#1e7253'
+                    : themeColors.text2
+                }
+                size={16}
+              />
+            </View>
+          </Animated.View>
+          <TextInput
+            placeholder="Busca orgánicos, marcas o categoría..."
+            placeholderTextColor={themeColors.text2}
+            style={[styles.searchInput, { color: themeColors.text1 }]}
+            value={query}
+            onChangeText={setQuery}
+            onFocus={() => setIsSearchFocused(true)}
+            onBlur={() => setIsSearchFocused(false)}
+            returnKeyType="search"
+            selectionColor={isDark ? '#7bc7a2' : '#1f8d63'}
+          />
+          {query.trim().length > 0 ? (
+            <Animated.View style={clearActionAnimStyle}>
+              <Pressable
+                onPress={() => setQuery('')}
+                style={[
+                  styles.clearSearchAction,
+                  {
+                    backgroundColor: isDark
+                      ? 'rgba(255,255,255,0.08)'
+                      : 'rgba(0,0,0,0.06)'
+                  }
+                ]}
+              >
+                <AppIcon
+                  name="x-circle"
+                  color={isDark ? '#dbe8df' : '#33594a'}
+                  size={16}
+                />
+              </Pressable>
+            </Animated.View>
+          ) : null}
+        </AppCard>
+      </Animated.View>
 
       <FlatList
         horizontal
@@ -268,7 +570,10 @@ export function CatalogScreen({ navigation }: Props) {
                 { borderColor: themeColors.border1, backgroundColor: isDark ? '#0a100d' : '#f1f3f0' },
                 isActive && [styles.chipActive, { borderColor: isDark ? 'rgba(111,168,138,0.45)' : 'rgba(40,179,130,0.45)', backgroundColor: isDark ? '#103126' : '#d7eee4' }]
               ]}
-              onPress={() => setCategorySlug(item.slug)}
+              onPress={() => {
+                setCategorySlug(item.slug);
+                setHighlightedProductId(null);
+              }}
             >
               <AppText style={[isActive ? styles.chipTextActive : styles.chipText, { color: isActive ? themeColors.text1 : themeColors.text2 }]}>
                 {`${getCategoryEmoji(item.name, item.slug)} ${item.name}`}
@@ -321,6 +626,7 @@ export function CatalogScreen({ navigation }: Props) {
         void handleAddFromCatalog(product);
       }}
       adding={addingProductId === item.id}
+      highlighted={highlightedProductId === item.id}
     />
   );
 
@@ -340,29 +646,89 @@ export function CatalogScreen({ navigation }: Props) {
         windowSize={9}
       />
 
-      <Modal visible={zonePickerOpen} transparent animationType="fade" onRequestClose={() => setZonePickerOpen(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setZonePickerOpen(false)}>
-          <Pressable style={[styles.modalCard, { backgroundColor: themeColors.surface1, borderColor: themeColors.border1 }]} onPress={() => {}}>
+      <Modal visible={zonePickerOpen} transparent animationType="none" onRequestClose={closeZonePicker}>
+        <View style={styles.modalRoot}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={closeZonePicker}>
+            <Animated.View
+              style={[
+                styles.modalBackdrop,
+                { backgroundColor: isDark ? 'rgba(2,8,5,0.72)' : 'rgba(6,28,20,0.35)' },
+                backdropAnimStyle
+              ]}
+            />
+          </Pressable>
+
+          <Animated.View
+            style={[
+              styles.modalCard,
+              {
+                backgroundColor: isDark ? '#0e1713' : '#f4fbf7',
+                borderColor: isDark ? 'rgba(111,168,138,0.35)' : 'rgba(40,179,130,0.26)'
+              },
+              sheetAnimStyle
+            ]}
+          >
+            <View style={[styles.sheetHandle, { backgroundColor: isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.16)' }]} />
             <AppText variant="heading">Selecciona tu zona</AppText>
+            <AppText style={{ color: themeColors.text2 }}>
+              Ajustamos catálogo y tiempos de entrega según tu ubicación.
+            </AppText>
+
             <View style={styles.zoneOptions}>
-              {zones.map((zone) => {
+              {zones.map((zone, index) => {
                 const isSelected = zone.id === zoneId;
                 return (
-                  <AppButton
+                  <Animated.View
                     key={zone.id}
-                    title={`${zone.city ? `${zone.city} / ` : ''}${zone.name}`}
-                    tone={isSelected ? 'primary' : 'ghost'}
-                    onPress={() => {
-                      void selectZone({ id: zone.id, name: zone.name, city: zone.city });
-                      setZonePickerOpen(false);
-                    }}
-                  />
+                    entering={FadeInDown.delay(index * 36).duration(280)}
+                  >
+                    <Pressable
+                      onPress={() => {
+                        void selectZone({ id: zone.id, name: zone.name, city: zone.city });
+                        closeZonePicker();
+                      }}
+                      style={[
+                        styles.zoneOptionPremium,
+                        {
+                          borderColor: isSelected
+                            ? isDark
+                              ? 'rgba(111,168,138,0.6)'
+                              : 'rgba(40,179,130,0.55)'
+                            : themeColors.border1,
+                          backgroundColor: isSelected
+                            ? isDark
+                              ? 'rgba(111,168,138,0.16)'
+                              : 'rgba(40,179,130,0.12)'
+                            : isDark
+                              ? '#121d18'
+                              : '#ffffff'
+                        }
+                      ]}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <AppText style={styles.zoneOptionTitle}>
+                          {zone.city ? `${zone.city} / ` : ''}
+                          {zone.name}
+                        </AppText>
+                        <AppText style={{ color: themeColors.text2, fontSize: 12 }}>
+                          Entrega promedio 30 - 60 min
+                        </AppText>
+                      </View>
+                      {isSelected ? (
+                        <AppIcon
+                          name="check-circle"
+                          color={isDark ? '#9be2c0' : '#1a7a56'}
+                          size={18}
+                        />
+                      ) : null}
+                    </Pressable>
+                  </Animated.View>
                 );
               })}
             </View>
-            <AppButton title="Cerrar" tone="ghost" onPress={() => setZonePickerOpen(false)} />
-          </Pressable>
-        </Pressable>
+            <AppButton title="Cerrar" tone="ghost" onPress={closeZonePicker} />
+          </Animated.View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -382,7 +748,19 @@ const styles = StyleSheet.create({
     borderColor: colors.border1,
     backgroundColor: '#121815',
     paddingHorizontal: 12,
-    paddingVertical: 12
+    paddingVertical: 12,
+    gap: 10
+  },
+  zoneBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 5
+  },
+  zoneBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5
   },
   zoneLabel: {
     color: colors.text2,
@@ -393,37 +771,88 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600'
   },
+  zoneChevronWrap: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
   zoneOptions: {
     gap: 8
   },
-  modalBackdrop: {
+  zoneOptionPremium: {
+    minHeight: 58,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8
+  },
+  zoneOptionTitle: {
+    fontSize: 15,
+    fontWeight: '700'
+  },
+  modalRoot: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    justifyContent: 'center',
-    padding: 18
+    justifyContent: 'flex-end'
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject
   },
   modalCard: {
     backgroundColor: colors.surface1,
-    borderRadius: 18,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     borderWidth: 1,
     borderColor: colors.border1,
-    padding: 14,
+    paddingHorizontal: 14,
+    paddingBottom: 18,
+    paddingTop: 10,
     gap: 12
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 46,
+    height: 5,
+    borderRadius: 999
   },
   searchCard: {
     borderRadius: 18,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 4,
-    backgroundColor: '#111714'
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    backgroundColor: '#111714',
+    overflow: 'hidden'
+  },
+  searchGlow: {
+    ...StyleSheet.absoluteFillObject
+  },
+  searchIconWrap: {
+    marginLeft: 2
   },
   searchIcon: {
-    marginLeft: 4
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   searchInput: {
     flex: 1,
     color: colors.text1,
-    fontSize: 16
+    fontSize: 15,
+    marginLeft: 8
+  },
+  clearSearchAction: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   chips: {
     flexDirection: 'row',
@@ -495,6 +924,13 @@ const styles = StyleSheet.create({
     borderColor: colors.border1,
     backgroundColor: '#0f1512',
     overflow: 'hidden'
+  },
+  productCardHighlighted: {
+    shadowColor: '#28b382',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.24,
+    shadowRadius: 14,
+    elevation: 6
   },
   productImage: {
     width: '100%',

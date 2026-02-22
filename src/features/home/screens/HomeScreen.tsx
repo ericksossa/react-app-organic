@@ -5,11 +5,14 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  TextInput,
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Feather } from '@expo/vector-icons';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { AppButton } from '../../../shared/ui/AppButton';
 import { AppText } from '../../../shared/ui/AppText';
 import { HomeStackParamList } from '../../../app/navigation/types';
@@ -17,6 +20,8 @@ import { useAuthStore } from '../../../state/authStore';
 import { useAvailabilityStore } from '../../../state/availabilityStore';
 import { toCachedImageSource } from '../../../shared/utils/media';
 import { useTheme } from '../../../shared/theme/useTheme';
+import { getItem, setItem } from '../../../services/storage/kvStorage';
+import { storageKeys } from '../../../config/storageKeys';
 
 const HERO_IMAGE =
   'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=1400&q=80';
@@ -46,6 +51,33 @@ const FEATURED_ITEMS = [
 
 const CURATED_IMAGE =
   'https://images.unsplash.com/photo-1518173946687-a4c8892bbd9f?auto=format&fit=crop&w=1400&q=80';
+const HOME_SEARCH_SUGGESTIONS = [
+  '🍓 Frutas',
+  '🥬 Verduras',
+  '🌱 Aromáticas',
+  '🥛 Lácteos',
+  '🥖 Panadería',
+  '🌾 Cereales',
+  '🫘 Legumbres'
+];
+const CATEGORY_SLUG_BY_LABEL: Record<string, string> = {
+  frutas: 'frutas',
+  verduras: 'verduras',
+  aromaticas: 'aromaticas',
+  aromáticas: 'aromaticas',
+  lacteos: 'lacteos',
+  lácteos: 'lacteos',
+  panaderia: 'panaderia',
+  panadería: 'panaderia',
+  cereales: 'cereales',
+  legumbres: 'legumbres'
+};
+const HOME_SEARCH_HISTORY_LIMIT = 6;
+
+type HomeSearchMemory = {
+  lastQuery: string;
+  recentSuggestions: string[];
+};
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'HomeMain'>;
 
@@ -74,10 +106,109 @@ export function HomeScreen({ navigation }: Props) {
   const { mode, toggleMode, colors } = useTheme();
   const isLight = mode === 'light';
   const actionColor = isLight ? '#1f2421' : '#f2f6f4';
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const [isSearchVisible, setIsSearchVisible] = React.useState(false);
+  const [isSearchFocused, setIsSearchFocused] = React.useState(false);
+  const [recentSuggestions, setRecentSuggestions] = React.useState<string[]>([]);
+  const searchInputRef = React.useRef<TextInput | null>(null);
+  const scrollRef = React.useRef<ScrollView | null>(null);
+
+  const normalizeSuggestionText = React.useCallback((value: string) => {
+    return value.replace(/^[^\s]+\s/, '').trim();
+  }, []);
+
+  const persistSearchMemory = React.useCallback(
+    async (nextQuery: string, nextRecent: string[]) => {
+      await setItem<HomeSearchMemory>(storageKeys.homeSearchMemory, {
+        lastQuery: nextQuery,
+        recentSuggestions: nextRecent.slice(0, HOME_SEARCH_HISTORY_LIMIT)
+      });
+    },
+    []
+  );
+
+  const upsertRecentSuggestion = React.useCallback(
+    (value: string) => {
+      const normalized = normalizeSuggestionText(value);
+      if (!normalized) return recentSuggestions;
+
+      const deduped = [normalized, ...recentSuggestions.filter((item) => item !== normalized)];
+      return deduped.slice(0, HOME_SEARCH_HISTORY_LIMIT);
+    },
+    [normalizeSuggestionText, recentSuggestions]
+  );
+
+  const suggestions = React.useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const suggestionPool = [
+      ...recentSuggestions.map((item) => `🔎 ${item}`),
+      ...HOME_SEARCH_SUGGESTIONS
+    ].filter((item, index, source) => source.indexOf(item) === index);
+
+    if (!q) return suggestionPool.slice(0, 5);
+
+    const filtered = suggestionPool.filter((item) =>
+      item.toLowerCase().includes(q)
+    );
+    return filtered.length > 0 ? filtered.slice(0, 5) : suggestionPool.slice(0, 3);
+  }, [recentSuggestions, searchQuery]);
+
+  const openCatalogWithQuery = React.useCallback(
+    async (raw: string) => {
+      const value = raw.trim();
+      const nextRecent = upsertRecentSuggestion(value);
+      setRecentSuggestions(nextRecent);
+      await persistSearchMemory(value, nextRecent);
+
+      const normalized = normalizeSuggestionText(value).toLowerCase();
+      const initialCategorySlug = CATEGORY_SLUG_BY_LABEL[normalized];
+
+      navigation.getParent()?.navigate(
+        'CatalogTab' as never,
+        ({
+          screen: 'CatalogMain',
+          params: value ? { initialQuery: value, initialCategorySlug } : {}
+        } as never)
+      );
+    },
+    [navigation, normalizeSuggestionText, persistSearchMemory, upsertRecentSuggestion]
+  );
+
+  const activateHomeSearch = React.useCallback(() => {
+    setIsSearchVisible(true);
+    setIsSearchFocused(true);
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+    requestAnimationFrame(() => {
+      searchInputRef.current?.focus();
+    });
+  }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      let active = true;
+
+      const hydrateSearchMemory = async () => {
+        const memory = await getItem<HomeSearchMemory>(storageKeys.homeSearchMemory);
+        if (!active || !memory) return;
+
+        if (memory.lastQuery) setSearchQuery(memory.lastQuery);
+        if (Array.isArray(memory.recentSuggestions)) {
+          setRecentSuggestions(memory.recentSuggestions.slice(0, HOME_SEARCH_HISTORY_LIMIT));
+        }
+      };
+
+      void hydrateSearchMemory();
+
+      return () => {
+        active = false;
+      };
+    }, [])
+  );
 
   return (
     <SafeAreaView edges={['top']} style={[styles.safeArea, { backgroundColor: colors.bg }]}>
       <ScrollView
+        ref={scrollRef}
         style={[styles.scroll, { backgroundColor: colors.bg }]}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -94,7 +225,7 @@ export function HomeScreen({ navigation }: Props) {
             <Pressable style={styles.iconButton}>
               <TopActionIcon name="share" color={actionColor} />
             </Pressable>
-            <Pressable style={styles.iconButton} onPress={() => navigation.getParent()?.navigate('CatalogTab' as never)}>
+            <Pressable style={styles.iconButton} onPress={activateHomeSearch}>
               <TopActionIcon name="search" color={actionColor} />
             </Pressable>
             <Pressable style={styles.iconButton} onPress={() => logout()}>
@@ -102,6 +233,114 @@ export function HomeScreen({ navigation }: Props) {
             </Pressable>
           </View>
         </View>
+
+        {isSearchVisible ? (
+          <View
+            style={[
+              styles.homeSearchCard,
+              {
+                borderColor:
+                  isSearchFocused || searchQuery.trim().length > 0
+                    ? isLight
+                      ? 'rgba(40,179,130,0.52)'
+                      : 'rgba(111,168,138,0.52)'
+                    : colors.border1,
+                backgroundColor: isLight ? '#eff5f1' : '#0f1914'
+              }
+            ]}
+          >
+            <View
+              style={[
+                styles.homeSearchIconWrap,
+                {
+                  backgroundColor: isLight
+                    ? 'rgba(0,0,0,0.05)'
+                    : 'rgba(255,255,255,0.06)'
+                }
+              ]}
+            >
+              <Feather name="search" size={16} color={isLight ? '#2a5f49' : '#cfe4d8'} />
+            </View>
+            <TextInput
+              ref={searchInputRef}
+              placeholder="Busca orgánicos en catálogo..."
+              placeholderTextColor={colors.text2}
+              style={[styles.homeSearchInput, { color: colors.text1 }]}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              onFocus={() => setIsSearchFocused(true)}
+              onBlur={() => setIsSearchFocused(false)}
+              onSubmitEditing={() => {
+                void openCatalogWithQuery(searchQuery);
+              }}
+              returnKeyType="search"
+            />
+            {searchQuery.trim().length > 0 ? (
+              <Pressable
+                style={[
+                  styles.homeSearchClear,
+                  { backgroundColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.09)' }
+                ]}
+                onPress={() => setSearchQuery('')}
+              >
+                <Feather name="x" size={16} color={isLight ? '#305b48' : '#dce9e1'} />
+              </Pressable>
+            ) : (
+              <Pressable
+                style={[
+                  styles.homeSearchClear,
+                  { backgroundColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.09)' }
+                ]}
+                onPress={() => {
+                  setIsSearchVisible(false);
+                  setIsSearchFocused(false);
+                }}
+              >
+                <Feather name="chevron-up" size={16} color={isLight ? '#305b48' : '#dce9e1'} />
+              </Pressable>
+            )}
+          </View>
+        ) : null}
+
+        {isSearchVisible && (isSearchFocused || searchQuery.trim().length > 0) && suggestions.length > 0 ? (
+          <View style={styles.homeSuggestionsRow}>
+            {suggestions.map((suggestion, index) => (
+              <Animated.View
+                key={suggestion}
+                entering={FadeInDown.delay(index * 42).duration(220)}
+              >
+                <Pressable
+                  style={[
+                    styles.homeSuggestionChip,
+                    {
+                      borderColor: isLight
+                        ? 'rgba(40,179,130,0.34)'
+                        : 'rgba(111,168,138,0.35)',
+                      backgroundColor: isLight
+                        ? 'rgba(220,244,233,0.9)'
+                        : 'rgba(16,37,29,0.9)'
+                    }
+                  ]}
+                  onPress={() => {
+                    const normalized = suggestion.replace(/^[^\s]+\s/, '');
+                    setSearchQuery(normalized);
+                    void openCatalogWithQuery(normalized);
+                  }}
+                >
+                  <AppText
+                    style={{
+                      color: isLight ? '#1d634a' : '#d8ebe0',
+                      fontSize: 12,
+                      fontWeight: '600'
+                    }}
+                  >
+                    {suggestion}
+                  </AppText>
+                </Pressable>
+              </Animated.View>
+            ))}
+          </View>
+        ) : null}
 
         <ImageBackground source={toCachedImageSource(HERO_IMAGE)} style={styles.hero} imageStyle={styles.heroImage}>
           <View style={styles.heroOverlay} />
@@ -222,6 +461,45 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  homeSearchCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 6
+  },
+  homeSearchIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  homeSearchInput: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 15
+  },
+  homeSearchClear: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  homeSuggestionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: -2
+  },
+  homeSuggestionChip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 11,
+    paddingVertical: 7
   },
   sunCore: {
     position: 'absolute',

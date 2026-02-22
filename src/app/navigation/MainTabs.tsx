@@ -8,10 +8,14 @@ import { CatalogStackNavigator } from './CatalogStackNavigator';
 import { CartStackNavigator } from './CartStackNavigator';
 import { useTheme } from '../../shared/theme/useTheme';
 import { AnimatedTabIcon } from './AnimatedTabIcon';
+import { withTabSceneTransition } from './withTabSceneTransition';
 
 const Tab = createBottomTabNavigator<AppTabsParamList>();
 
 const TAB_BAR_BASE_HEIGHT = 68;
+const HomeScene = withTabSceneTransition(HomeStackNavigator);
+const CatalogScene = withTabSceneTransition(CatalogStackNavigator);
+const CartScene = withTabSceneTransition(CartStackNavigator);
 
 export function MainTabs() {
   const { colors, isDark } = useTheme();
@@ -25,6 +29,7 @@ export function MainTabs() {
 
   return (
     <Tab.Navigator
+      detachInactiveScreens={false}
       screenOptions={{
         headerShown: false,
         tabBarShowLabel: false,
@@ -42,7 +47,7 @@ export function MainTabs() {
     >
       <Tab.Screen
         name="HomeTab"
-        component={HomeStackNavigator}
+        component={HomeScene}
         options={{
           tabBarIcon: ({ focused }) => (
             <AnimatedTabIcon
@@ -57,7 +62,7 @@ export function MainTabs() {
       />
       <Tab.Screen
         name="CatalogTab"
-        component={CatalogStackNavigator}
+        component={CatalogScene}
         options={{
           tabBarIcon: ({ focused }) => (
             <AnimatedTabIcon
@@ -72,7 +77,7 @@ export function MainTabs() {
       />
       <Tab.Screen
         name="CartTab"
-        component={CartStackNavigator}
+        component={CartScene}
         options={{
           tabBarIcon: ({ focused }) => (
             <AnimatedTabIcon
