@@ -158,7 +158,7 @@ function ScrollRevealCard({
           )
         },
         {
-          scale: interpolate(scrollY.value, [0, revealStart, revealEnd], [1, 1, 0.986], Extrapolation.CLAMP)
+          scale: interpolate(scrollY.value, [0, revealStart, revealEnd], [1, 1, 1], Extrapolation.CLAMP)
         }
       ],
       opacity: interpolate(scrollY.value, [0, revealStart, revealEnd], [1, 1, 0.93], Extrapolation.CLAMP),
@@ -171,7 +171,7 @@ function ScrollRevealCard({
   }, [index, scrollY]);
 
   return (
-    <Animated.View entering={FadeInDown.delay(index * 56).duration(340)} style={style}>
+    <Animated.View entering={FadeInDown.delay(index * 56).duration(340)} style={[style, { overflow: 'visible' }]}>
       <Animated.View style={revealStyle}>{children}</Animated.View>
     </Animated.View>
   );
@@ -989,12 +989,13 @@ const styles = StyleSheet.create({
     fontWeight: '700'
   },
   categoriesBlock: {
-    gap: 12,
+    gap: 16,
     paddingHorizontal: 2
   },
   featuredBlock: {
     gap: 12,
-    paddingHorizontal: 2
+    paddingHorizontal: 2,
+    overflow: 'visible'
   },
   sectionTitleRow: {
     flexDirection: 'row',
@@ -1013,7 +1014,9 @@ const styles = StyleSheet.create({
   },
   categoriesRow: {
     gap: 12,
-    paddingRight: 24
+    paddingLeft: 2,
+    paddingRight: 28,
+    paddingTop: 4
   },
   categoryThumb: {
     width: 54,
@@ -1028,11 +1031,14 @@ const styles = StyleSheet.create({
   },
   featuredRow: {
     gap: 12,
-    paddingRight: 60
+    paddingLeft: 2,
+    paddingRight: 84,
+    paddingTop: 4,
+    paddingBottom: 12
   },
   featuredCard: {
-    width: 240,
-    height: 240,
+    width: 272,
+    height: 272,
     borderRadius: 22,
     overflow: 'hidden',
     justifyContent: 'flex-end'
@@ -1045,8 +1051,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(7, 12, 10, 0.2)'
   },
   featuredContent: {
-    paddingHorizontal: 14,
-    paddingBottom: 14
+    paddingHorizontal: 16,
+    paddingBottom: 18
   },
   featuredEyebrow: {
     color: 'rgba(237,244,240,0.8)',
@@ -1055,8 +1061,8 @@ const styles = StyleSheet.create({
     marginBottom: 4
   },
   featuredText: {
-    fontSize: 32,
-    lineHeight: 36,
+    fontSize: 36,
+    lineHeight: 40,
     fontWeight: '700',
     color: '#edf3ef'
   },

@@ -26,8 +26,7 @@ import { SeedButton } from '../components/SeedButton';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'IntroOnboarding'>;
 
-const PRIMARY_HERO_VIDEO =
-  'https://assets.mixkit.co/videos/preview/mixkit-farmer-holding-fresh-vegetables-5173-large.mp4';
+const PRIMARY_HERO_VIDEO = require('../../../../assets/videos/onboarding-seed-hero.mp4');
 const FALLBACK_HERO_VIDEO =
   'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
 
@@ -84,7 +83,7 @@ function useOnboardingTransition(onEnd: () => void, reduceMotion: boolean) {
 export function OnboardingScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotionSetting();
-  const [videoSource, setVideoSource] = useState(PRIMARY_HERO_VIDEO);
+  const [videoSource, setVideoSource] = useState<string | number>(PRIMARY_HERO_VIDEO);
   const breath = useSharedValue(0);
   const intro = useSharedValue(0);
   const player = useVideoPlayer(videoSource, (instance) => {
@@ -176,7 +175,7 @@ export function OnboardingScreen({ navigation }: Props) {
             style={styles.heroVideo}
             contentFit="cover"
             nativeControls={false}
-            allowsFullscreen={false}
+            fullscreenOptions={{ enable: false }}
             allowsPictureInPicture={false}
           />
           <View style={styles.heroMask} />
@@ -209,7 +208,7 @@ export function OnboardingScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#355f34',
+    backgroundColor: '#000',
     paddingHorizontal: 16
   },
   heroCard: {
