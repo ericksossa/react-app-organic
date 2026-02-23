@@ -37,6 +37,8 @@ import { getItem, setItem } from '../../../services/storage/kvStorage';
 import { storageKeys } from '../../../config/storageKeys';
 import { brandMicrocopy, getZoneDeliveryMicrocopy } from '../../../shared/copy/brand-microcopy';
 import { getCatalog } from '../../../services/api/catalogApi';
+import { useReducedMotionSetting } from '../../../design/motion/useReducedMotionSetting';
+import { Reveal } from '../../../design/motion/Reveal';
 
 const HERO_IMAGE =
   'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=1400&q=80';
@@ -180,6 +182,7 @@ export function HomeScreen({ navigation }: Props) {
   const selectedZoneId = useAvailabilityStore((s) => s.selectedZoneId);
   const selectedZone = useAvailabilityStore((s) => s.selectedZone);
   const { mode, toggleMode, colors } = useTheme();
+  const reduceMotion = useReducedMotionSetting();
   const isLight = mode === 'light';
   const actionColor = isLight ? '#1f2421' : '#f2f6f4';
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -356,24 +359,28 @@ export function HomeScreen({ navigation }: Props) {
 
   const topBarScrollStyle = useAnimatedStyle(() => ({
     transform: [
-      { translateY: interpolate(scrollY.value, [0, 120], [0, -8], Extrapolation.CLAMP) }
+      { translateY: reduceMotion ? 0 : interpolate(scrollY.value, [0, 120], [0, -8], Extrapolation.CLAMP) }
     ],
     opacity: interpolate(scrollY.value, [0, 120], [1, 0.94], Extrapolation.CLAMP)
-  }));
+  }), [reduceMotion]);
 
   const heroScrollStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: interpolate(scrollY.value, [0, 220], [0, -14], Extrapolation.CLAMP) },
-      { scale: interpolate(scrollY.value, [0, 220], [1, 1.03], Extrapolation.CLAMP) }
-    ]
-  }));
+    transform: reduceMotion
+      ? []
+      : [
+          { translateY: interpolate(scrollY.value, [0, 220], [0, -14], Extrapolation.CLAMP) },
+          { scale: interpolate(scrollY.value, [0, 220], [1, 1.03], Extrapolation.CLAMP) }
+        ]
+  }), [reduceMotion]);
 
   const blockScrollStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: interpolate(scrollY.value, [0, 240], [0, -6], Extrapolation.CLAMP) }
-    ],
+    transform: reduceMotion
+      ? []
+      : [
+          { translateY: interpolate(scrollY.value, [0, 240], [0, -6], Extrapolation.CLAMP) }
+        ],
     opacity: interpolate(scrollY.value, [0, 300], [1, 0.96], Extrapolation.CLAMP)
-  }));
+  }), [reduceMotion]);
 
   return (
     <SafeAreaView edges={['top']} style={[styles.safeArea, { backgroundColor: colors.bg }]}>
@@ -537,7 +544,8 @@ export function HomeScreen({ navigation }: Props) {
         </Animated.View>
 
         <ScrollRevealCard index={1} scrollY={scrollY}>
-          <View
+          <Reveal delayMs={40}>
+            <View
             style={[
               styles.ecosystemCard,
               {
@@ -545,28 +553,29 @@ export function HomeScreen({ navigation }: Props) {
                 shadowColor: isLight ? '#2f5840' : '#163024'
               }
             ]}
-          >
-            <View
+            >
+              <View
               style={[
                 styles.ecosystemLeafAccent,
                 { backgroundColor: isLight ? 'rgba(232, 242, 236, 0.1)' : 'rgba(189, 226, 205, 0.08)' }
               ]}
-            />
-            <AppText style={styles.ecosystemEyebrow}>ESTADO DEL ECOSISTEMA</AppText>
-            <AppText style={styles.ecosystemQuote}>
+              />
+              <AppText style={styles.ecosystemEyebrow}>ESTADO DEL ECOSISTEMA</AppText>
+              <AppText style={styles.ecosystemQuote}>
               {availableProductsCount !== null
                 ? `Hoy tenemos ${availableProductsCount} productos disponibles en ${selectedZone?.name ?? 'tu zona'}, listos para tu canasta.`
                 : 'Estamos afinando la cosecha de hoy para mostrarte disponibilidad real en tu zona.'}
-            </AppText>
-            <View style={styles.ecosystemFooter}>
-              <View style={styles.ecosystemDot} />
-              <AppText style={styles.ecosystemMetric}>
+              </AppText>
+              <View style={styles.ecosystemFooter}>
+                <View style={styles.ecosystemDot} />
+                <AppText style={styles.ecosystemMetric}>
                 {availableProductsCount !== null
                   ? `${availableProductsCount} productos disponibles ahora`
                   : 'Actualizando disponibilidad'}
-              </AppText>
+                </AppText>
+              </View>
             </View>
-          </View>
+          </Reveal>
         </ScrollRevealCard>
 
         <Animated.View style={[styles.categoriesBlock, blockScrollStyle]}>

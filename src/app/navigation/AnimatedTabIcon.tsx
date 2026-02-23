@@ -8,6 +8,8 @@ import Animated, {
   withTiming
 } from 'react-native-reanimated';
 import { AppText } from '../../shared/ui/AppText';
+import { motionDuration, motionEasings } from '../../design/motion/tokens';
+import { useReducedMotionSetting } from '../../design/motion/useReducedMotionSetting';
 
 type IconName = 'home' | 'explore' | 'cart';
 
@@ -19,8 +21,6 @@ type Props = {
   inactiveColor: string;
 };
 
-const ANIM_DURATION = 220;
-
 export function AnimatedTabIcon({
   focused,
   label,
@@ -28,24 +28,28 @@ export function AnimatedTabIcon({
   activeColor,
   inactiveColor
 }: Props) {
+  const reduceMotion = useReducedMotionSetting();
   const progress = useSharedValue(focused ? 1 : 0);
 
   useEffect(() => {
-    progress.value = withTiming(focused ? 1 : 0, { duration: ANIM_DURATION });
-  }, [focused, progress]);
+    progress.value = withTiming(focused ? 1 : 0, {
+      duration: motionDuration('short', reduceMotion),
+      easing: motionEasings.organic
+    });
+  }, [focused, progress, reduceMotion]);
 
   const activePillStyle = useAnimatedStyle(() => ({
     opacity: progress.value,
-    transform: [{ scale: interpolate(progress.value, [0, 1], [0.6, 1]) }]
+    transform: reduceMotion ? [] : [{ scale: interpolate(progress.value, [0, 1], [0.6, 1]) }]
   }));
 
   const iconStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: interpolate(progress.value, [0, 1], [1, 1.08]) }]
+    transform: reduceMotion ? [] : [{ scale: interpolate(progress.value, [0, 1], [1, 1.08]) }]
   }));
 
   const labelStyle = useAnimatedStyle(() => ({
     opacity: interpolate(progress.value, [0, 1], [0.92, 1]),
-    transform: [{ translateY: interpolate(progress.value, [0, 1], [0, -1]) }]
+    transform: reduceMotion ? [] : [{ translateY: interpolate(progress.value, [0, 1], [0, -1]) }]
   }));
 
   const tone = focused ? activeColor : inactiveColor;

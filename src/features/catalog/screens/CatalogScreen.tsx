@@ -41,8 +41,12 @@ import Animated, {
   useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
+  withSequence,
   withTiming
 } from 'react-native-reanimated';
+import { useReducedMotionSetting } from '../../../design/motion/useReducedMotionSetting';
+import { motionDuration, motionEasings } from '../../../design/motion/tokens';
+import { Reveal } from '../../../design/motion/Reveal';
 
 type Props = NativeStackScreenProps<CatalogStackParamList, 'CatalogMain'>;
 const ZONE_SHEET_ANIM_MS = 280;
@@ -129,8 +133,19 @@ const CatalogRow = React.memo(function CatalogRow({
   scrollY: SharedValue<number>;
 }) {
   const { colors: themeColors, isDark } = useTheme();
+  const reduceMotion = useReducedMotionSetting();
   const isAvailable = index % 4 !== 0;
   const imagePressProgress = useSharedValue(0);
+  const addFeedbackProgress = useSharedValue(0);
+
+  React.useEffect(() => {
+    if (!adding || reduceMotion) return;
+
+    addFeedbackProgress.value = withSequence(
+      withTiming(1, { duration: motionDuration('micro', reduceMotion), easing: motionEasings.enter }),
+      withTiming(0, { duration: motionDuration('short', reduceMotion), easing: motionEasings.organic })
+    );
+  }, [addFeedbackProgress, adding, reduceMotion]);
   const rowScrollStyle = useAnimatedStyle(() => {
     const rowIndex = Math.floor(index / 2);
     const revealStart = rowIndex * 56;
@@ -149,7 +164,7 @@ const CatalogRow = React.memo(function CatalogRow({
           translateY: interpolate(
             scrollY.value,
             [0, revealStart, revealEnd],
-            [0, 0, -8],
+            reduceMotion ? [0, 0, 0] : [0, 0, -8],
             Extrapolation.CLAMP
           )
         },
@@ -157,7 +172,7 @@ const CatalogRow = React.memo(function CatalogRow({
           scale: interpolate(
             scrollY.value,
             [0, revealStart, revealEnd],
-            [1, 1, 0.987],
+            reduceMotion ? [1, 1, 1] : [1, 1, 0.987],
             Extrapolation.CLAMP
           )
         },
@@ -165,7 +180,7 @@ const CatalogRow = React.memo(function CatalogRow({
           translateX: interpolate(
             scrollY.value,
             [0, revealStart, revealEnd],
-            [0, 0, lateralShift],
+            reduceMotion ? [0, 0, 0] : [0, 0, lateralShift],
             Extrapolation.CLAMP
           )
         }
@@ -182,48 +197,65 @@ const CatalogRow = React.memo(function CatalogRow({
       shadowOpacity: CATALOG_CARD_SHADOW_OPACITY * depthStrength,
       elevation: CATALOG_CARD_ELEVATION * depthStrength
     };
-  }, [index, scrollY]);
+  }, [index, reduceMotion, scrollY]);
   const imageZoomStyle = useAnimatedStyle(() => ({
     transform: [
       {
-        scale: interpolate(imagePressProgress.value, [0, 1], [1.045, 1.095], Extrapolation.CLAMP)
+        scale: interpolate(
+          imagePressProgress.value,
+          [0, 1],
+          reduceMotion ? [1, 1] : [1.045, 1.095],
+          Extrapolation.CLAMP
+        )
       }
     ]
-  }));
+  }), [reduceMotion]);
+  const addFeedbackStyle = useAnimatedStyle(() => ({
+    transform: reduceMotion
+      ? []
+      : [{ scale: interpolate(addFeedbackProgress.value, [0, 1], [1, 1.015], Extrapolation.CLAMP) }]
+  }), [reduceMotion]);
 
   return (
     <Animated.View
       entering={FadeInDown.delay((index % 8) * 46).duration(320)}
       style={styles.productCell}
     >
-      <Animated.View
-        style={[
-          styles.productCard,
-          {
-            borderColor: highlighted
-              ? isDark
-                ? 'rgba(111,168,138,0.72)'
-                : 'rgba(40,179,130,0.72)'
-              : themeColors.border1,
-            backgroundColor: highlighted
-              ? isDark
-                ? 'rgba(16,38,30,0.94)'
-                : '#e7f6ef'
-              : isDark
-                ? '#0f1512'
-                : '#f5f7f4'
-          },
-          highlighted && styles.productCardHighlighted,
-          rowScrollStyle
-        ]}
-      >
+      <Animated.View style={addFeedbackStyle}>
+        <Animated.View
+          style={[
+            styles.productCard,
+            {
+              borderColor: highlighted
+                ? isDark
+                  ? 'rgba(111,168,138,0.72)'
+                  : 'rgba(40,179,130,0.72)'
+                : themeColors.border1,
+              backgroundColor: highlighted
+                ? isDark
+                  ? 'rgba(16,38,30,0.94)'
+                  : '#e7f6ef'
+                : isDark
+                  ? '#0f1512'
+                  : '#f5f7f4'
+            },
+            highlighted && styles.productCardHighlighted,
+            rowScrollStyle
+          ]}
+        >
         <Pressable
           onPress={() => onOpen(item.slug)}
           onPressIn={() => {
-            imagePressProgress.value = withTiming(1, { duration: 180 });
+            imagePressProgress.value = withTiming(1, {
+              duration: motionDuration('short', reduceMotion),
+              easing: motionEasings.organic
+            });
           }}
           onPressOut={() => {
-            imagePressProgress.value = withTiming(0, { duration: 220 });
+            imagePressProgress.value = withTiming(0, {
+              duration: motionDuration('short', reduceMotion),
+              easing: motionEasings.organic
+            });
           }}
         >
           <View style={styles.productImageViewport}>
@@ -267,6 +299,7 @@ const CatalogRow = React.memo(function CatalogRow({
           titleStyle={styles.cardAddButtonText}
           titleNumberOfLines={2}
         />
+        </Animated.View>
       </Animated.View>
     </Animated.View>
   );
@@ -274,6 +307,7 @@ const CatalogRow = React.memo(function CatalogRow({
 
 export function CatalogScreen({ navigation, route }: Props) {
   const { colors: themeColors, isDark } = useTheme();
+  const reduceMotion = useReducedMotionSetting();
   const zoneId = useAvailabilityStore((s) => s.selectedZoneId);
   const selectedZone = useAvailabilityStore((s) => s.selectedZone);
   const selectZone = useAvailabilityStore((s) => s.selectZone);
@@ -802,7 +836,7 @@ export function CatalogScreen({ navigation, route }: Props) {
         <ImageBackground
           source={toCachedImageSource(featured.imageUrl)}
           style={styles.featuredCard}
-          imageStyle={[styles.featuredImage, styles.featuredImageZoom]}
+          imageStyle={[styles.featuredImage, !reduceMotion && styles.featuredImageZoom]}
         >
           <View style={[styles.featuredOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.12)' }]} />
           <View style={styles.featuredContent}>
@@ -825,9 +859,11 @@ export function CatalogScreen({ navigation, route }: Props) {
       ) : null}
 
       {!catalogQuery.isLoading && !catalogQuery.isError && products.length === 0 ? (
-        <AppCard style={{ backgroundColor: themeColors.surface1, borderColor: themeColors.border1 }}>
-          <AppText>{brandMicrocopy.states.noProductsAvailable}</AppText>
-        </AppCard>
+        <Reveal delayMs={40}>
+          <AppCard style={{ backgroundColor: themeColors.surface1, borderColor: themeColors.border1 }}>
+            <AppText>{brandMicrocopy.states.noProductsAvailable}</AppText>
+          </AppCard>
+        </Reveal>
       ) : null}
     </View>
   );
@@ -901,7 +937,7 @@ export function CatalogScreen({ navigation, route }: Props) {
                 return (
                   <Animated.View
                     key={zone.id}
-                    entering={FadeInDown.delay(index * 36).duration(280)}
+                    entering={reduceMotion ? undefined : FadeInDown.delay(index * 36).duration(280)}
                   >
                     <Pressable
                       onPress={() => {

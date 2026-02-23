@@ -14,6 +14,7 @@ import { CartItem } from '../types';
 import { toCachedImageSource } from '../../../shared/utils/media';
 import { useTheme } from '../../../shared/theme/useTheme';
 import { brandMicrocopy } from '../../../shared/copy/brand-microcopy';
+import { Reveal } from '../../../design/motion/Reveal';
 
 type Props = NativeStackScreenProps<CartStackParamList, 'CartMain'>;
 
@@ -118,19 +119,21 @@ export function CartScreen({ navigation }: Props) {
       {loading ? <AppText>Actualizando tu canasta...</AppText> : null}
       {error ? <AppText style={{ color: themeColors.danger }}>{error}</AppText> : null}
       {!loading && !error && items.length === 0 ? (
-        <AppCard
-          style={[
-            styles.emptyCard,
-            { backgroundColor: isDark ? '#0f1815' : '#f4f6f3', borderColor: themeColors.border1 }
-          ]}
-        >
-          <AppText variant="heading" style={styles.emptyTitle}>
-            Tu canasta está vacía por ahora
-          </AppText>
-          <AppText style={[styles.emptySubtitle, { color: themeColors.text2 }]}>
-            Explora el mercado y elige algo fresco para empezar.
-          </AppText>
-        </AppCard>
+        <Reveal delayMs={40}>
+          <AppCard
+            style={[
+              styles.emptyCard,
+              { backgroundColor: isDark ? '#0f1815' : '#f4f6f3', borderColor: themeColors.border1 }
+            ]}
+          >
+            <AppText variant="heading" style={styles.emptyTitle}>
+              Tu canasta está vacía por ahora
+            </AppText>
+            <AppText style={[styles.emptySubtitle, { color: themeColors.text2 }]}>
+              Explora el mercado y elige algo fresco para empezar.
+            </AppText>
+          </AppCard>
+        </Reveal>
       ) : null}
     </View>
   );

@@ -10,15 +10,20 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
-  Easing,
+  cancelAnimation,
   interpolate,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
+  withRepeat,
+  withSequence,
   withTiming
 } from 'react-native-reanimated';
 import { RootStackParamList } from '../../../app/navigation/types';
 import { AppText } from '../../../shared/ui/AppText';
+import { motionDuration, motionEasings } from '../../../design/motion/tokens';
+import { useReducedMotionSetting } from '../../../design/motion/useReducedMotionSetting';
+import { MotionPressable } from '../../../design/motion/MotionPressable';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'IntroOnboarding'>;
 
@@ -27,10 +32,10 @@ const PRIMARY_HERO_VIDEO =
 const FALLBACK_HERO_VIDEO =
   'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
 
-const TRANSITION_DURATION = 560;
+const TRANSITION_DURATION = motionDuration('narrative');
 const HERO_SCALE_TO = 1.08;
 
-function useOnboardingTransition(onEnd: () => void) {
+function useOnboardingTransition(onEnd: () => void, reduceMotion: boolean) {
   const progress = useSharedValue(0);
   const [isLocked, setIsLocked] = useState(false);
 
@@ -41,8 +46,8 @@ function useOnboardingTransition(onEnd: () => void) {
     progress.value = withTiming(
       1,
       {
-        duration: TRANSITION_DURATION,
-        easing: Easing.out(Easing.cubic)
+        duration: motionDuration('narrative', reduceMotion),
+        easing: motionEasings.organic
       },
       (finished) => {
         if (!finished) return;
@@ -52,10 +57,12 @@ function useOnboardingTransition(onEnd: () => void) {
   }, [isLocked, onEnd, progress]);
 
   const heroStyle = useAnimatedStyle(() => ({
-    transform: [
-      { scale: interpolate(progress.value, [0, 1], [1, HERO_SCALE_TO]) },
-      { translateY: interpolate(progress.value, [0, 1], [0, -14]) }
-    ]
+    transform: reduceMotion
+      ? []
+      : [
+          { scale: interpolate(progress.value, [0, 1], [1, HERO_SCALE_TO]) },
+          { translateY: interpolate(progress.value, [0, 1], [0, -14]) }
+        ]
   }));
 
   const fadeStyle = useAnimatedStyle(() => ({
@@ -63,7 +70,7 @@ function useOnboardingTransition(onEnd: () => void) {
   }));
 
   const ctaStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: interpolate(progress.value, [0, 1], [1, 0.92]) }],
+    transform: reduceMotion ? [] : [{ scale: interpolate(progress.value, [0, 1], [1, 0.92]) }],
     opacity: interpolate(progress.value, [0, 1], [1, 0.6])
   }));
 
@@ -78,7 +85,10 @@ function useOnboardingTransition(onEnd: () => void) {
 
 export function OnboardingScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReducedMotionSetting();
   const [videoSource, setVideoSource] = useState(PRIMARY_HERO_VIDEO);
+  const breath = useSharedValue(0);
+  const intro = useSharedValue(0);
   const player = useVideoPlayer(videoSource, (instance) => {
     instance.loop = true;
     instance.muted = true;
@@ -95,7 +105,60 @@ export function OnboardingScreen({ navigation }: Props) {
   const { isLocked, start, heroStyle, fadeStyle, ctaStyle } =
     useOnboardingTransition(() => {
       navigation.replace('MainTabs');
+    }, reduceMotion);
+
+  useEffect(() => {
+    intro.value = withTiming(1, {
+      duration: motionDuration('base', reduceMotion),
+      easing: motionEasings.enter
     });
+  }, [intro, reduceMotion]);
+
+  useEffect(() => {
+    if (reduceMotion) {
+      cancelAnimation(breath);
+      breath.value = 0;
+      return;
+    }
+
+    breath.value = withRepeat(
+      withSequence(
+        withTiming(1, {
+          duration: motionDuration('narrative', reduceMotion),
+          easing: motionEasings.organic
+        }),
+        withTiming(0, {
+          duration: motionDuration('narrative', reduceMotion),
+          easing: motionEasings.organic
+        })
+      ),
+      -1,
+      false
+    );
+
+    return () => {
+      cancelAnimation(breath);
+    };
+  }, [breath, reduceMotion]);
+
+  const breathStyle = useAnimatedStyle(() => ({
+    transform: reduceMotion
+      ? []
+      : [
+          { scale: interpolate(breath.value, [0, 1], [1, 1.03]) },
+          { translateY: interpolate(breath.value, [0, 1], [0, -4]) }
+        ]
+  }));
+
+  const introTextStyle = useAnimatedStyle(() => ({
+    opacity: intro.value,
+    transform: reduceMotion ? [] : [{ translateY: interpolate(intro.value, [0, 1], [10, 0]) }]
+  }));
+
+  const introCtaStyle = useAnimatedStyle(() => ({
+    opacity: intro.value,
+    transform: reduceMotion ? [] : [{ translateY: interpolate(intro.value, [0, 1], [12, 0]) }]
+  }));
 
   return (
     <View style={styles.screen}>
@@ -109,7 +172,7 @@ export function OnboardingScreen({ navigation }: Props) {
           heroStyle
         ]}
       >
-        <View style={styles.heroImage}>
+        <Animated.View style={[styles.heroImage, breathStyle]}>
           <VideoView
             player={player}
             style={styles.heroVideo}
@@ -121,20 +184,21 @@ export function OnboardingScreen({ navigation }: Props) {
           <View style={styles.heroMask} />
           <Animated.View style={[styles.heroFade, fadeStyle]} />
 
-          <View style={styles.copyWrap}>
+          <Animated.View style={[styles.copyWrap, introTextStyle]}>
             <AppText style={styles.title}>Explora tu mercado orgánico</AppText>
             <AppText style={styles.subtitle}>
               Hagamos nuestra vida mejor con alimentos reales.
             </AppText>
-          </View>
+          </Animated.View>
 
-          <Animated.View style={[styles.ctaBlock, ctaStyle]}>
+          <Animated.View style={[styles.ctaBlock, ctaStyle, introCtaStyle]}>
             <View style={styles.decorativeHandle}>
               <Feather name="chevrons-up" size={18} color="rgba(245,250,246,0.92)" />
             </View>
-            <Pressable
+            <MotionPressable
               disabled={isLocked}
               onPress={start}
+              pressedScale={0.98}
               style={({ pressed }) => [
                 styles.goButton,
                 isLocked && styles.goButtonDisabled,
@@ -142,9 +206,9 @@ export function OnboardingScreen({ navigation }: Props) {
               ]}
             >
               <AppText style={styles.goLabel}>{isLocked ? '...' : 'Go'}</AppText>
-            </Pressable>
+            </MotionPressable>
           </Animated.View>
-        </View>
+        </Animated.View>
       </Animated.View>
     </View>
   );

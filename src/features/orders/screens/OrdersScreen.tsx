@@ -9,6 +9,7 @@ import { AppButton } from '../../../shared/ui/AppButton';
 import { colors } from '../../../shared/theme/tokens';
 import { OrderDetail, listOrders } from '../../../services/api/ordersApi';
 import { OrdersFlowParamList } from '../types';
+import { Reveal } from '../../../design/motion/Reveal';
 
 type Props = NativeStackScreenProps<OrdersFlowParamList, 'OrdersMain'>;
 
@@ -69,21 +70,25 @@ export function OrdersScreen({ navigation }: Props) {
               </View>
             </View>
           ) : ordersQuery.isError ? (
-            <AppCard style={styles.stateCard}>
-              <AppText variant="heading">No pudimos cargar tus pedidos</AppText>
-              <AppText style={{ color: colors.text2 }}>Vuelve a intentarlo en unos segundos.</AppText>
-              <AppButton title="Intentar de nuevo" tone="ghost" onPress={() => ordersQuery.refetch()} />
-            </AppCard>
+            <Reveal delayMs={40}>
+              <AppCard style={styles.stateCard}>
+                <AppText variant="heading">No pudimos cargar tus pedidos</AppText>
+                <AppText style={{ color: colors.text2 }}>Vuelve a intentarlo en unos segundos.</AppText>
+                <AppButton title="Intentar de nuevo" tone="ghost" onPress={() => ordersQuery.refetch()} />
+              </AppCard>
+            </Reveal>
           ) : (
-            <AppCard style={styles.stateCard}>
-              <AppText variant="heading">Aún no tienes pedidos</AppText>
-              <AppText style={{ color: colors.text2 }}>Cuando confirmes tu primera compra, aparecerá aquí.</AppText>
-              <AppButton
-                title="Ir a mi canasta"
-                tone="ghost"
-                onPress={() => navigation.getParent()?.navigate('CartTab' as never)}
-              />
-            </AppCard>
+            <Reveal delayMs={40}>
+              <AppCard style={styles.stateCard}>
+                <AppText variant="heading">Aún no tienes pedidos</AppText>
+                <AppText style={{ color: colors.text2 }}>Cuando confirmes tu primera compra, aparecerá aquí.</AppText>
+                <AppButton
+                  title="Ir a mi canasta"
+                  tone="ghost"
+                  onPress={() => navigation.getParent()?.navigate('CartTab' as never)}
+                />
+              </AppCard>
+            </Reveal>
           )
         }
         removeClippedSubviews
