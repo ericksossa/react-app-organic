@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  Pressable,
   StyleSheet,
   View
 } from 'react-native';
@@ -23,7 +22,7 @@ import { RootStackParamList } from '../../../app/navigation/types';
 import { AppText } from '../../../shared/ui/AppText';
 import { motionDuration, motionEasings } from '../../../design/motion/tokens';
 import { useReducedMotionSetting } from '../../../design/motion/useReducedMotionSetting';
-import { MotionPressable } from '../../../design/motion/MotionPressable';
+import { SeedButton } from '../components/SeedButton';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'IntroOnboarding'>;
 
@@ -32,7 +31,6 @@ const PRIMARY_HERO_VIDEO =
 const FALLBACK_HERO_VIDEO =
   'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
 
-const TRANSITION_DURATION = motionDuration('narrative');
 const HERO_SCALE_TO = 1.08;
 
 function useOnboardingTransition(onEnd: () => void, reduceMotion: boolean) {
@@ -54,7 +52,7 @@ function useOnboardingTransition(onEnd: () => void, reduceMotion: boolean) {
         runOnJS(onEnd)();
       }
     );
-  }, [isLocked, onEnd, progress]);
+  }, [isLocked, onEnd, progress, reduceMotion]);
 
   const heroStyle = useAnimatedStyle(() => ({
     transform: reduceMotion
@@ -195,18 +193,12 @@ export function OnboardingScreen({ navigation }: Props) {
             <View style={styles.decorativeHandle}>
               <Feather name="chevrons-up" size={18} color="rgba(245,250,246,0.92)" />
             </View>
-            <MotionPressable
+            <SeedButton
               disabled={isLocked}
               onPress={start}
-              pressedScale={0.98}
-              style={({ pressed }) => [
-                styles.goButton,
-                isLocked && styles.goButtonDisabled,
-                pressed && !isLocked && styles.goButtonPressed
-              ]}
-            >
-              <AppText style={styles.goLabel}>{isLocked ? '...' : 'Go'}</AppText>
-            </MotionPressable>
+              size={100}
+              label="Entrar al mercado"
+            />
           </Animated.View>
         </Animated.View>
       </Animated.View>
@@ -272,29 +264,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(240,246,241,0.26)',
     alignItems: 'center',
     justifyContent: 'flex-start',
-    paddingTop: 16
-  },
-  goButton: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    marginTop: -50,
-    backgroundColor: '#F7FAF8',
-    borderWidth: 1,
-    borderColor: 'rgba(21,32,24,0.1)',
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  goButtonPressed: {
-    transform: [{ scale: 0.97 }]
-  },
-  goButtonDisabled: {
-    opacity: 0.85
-  },
-  goLabel: {
-    color: '#121d16',
-    fontSize: 21,
-    lineHeight: 24,
-    fontWeight: '700'
+    paddingTop: 16,
+    overflow: 'visible'
   }
 });
