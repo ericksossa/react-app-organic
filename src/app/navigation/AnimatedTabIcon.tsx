@@ -96,7 +96,13 @@ function TabGlyph({
     return <Feather name="search" color={color} size={size} />;
   }
 
-  return <Feather name="shopping-cart" color={color} size={size} />;
+  return (
+    <Ionicons
+      name="basket-outline"
+      color={color}
+      size={Math.max(18, size - 1)}
+    />
+  );
 }
 
 const styles = StyleSheet.create({

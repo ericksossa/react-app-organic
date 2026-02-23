@@ -35,6 +35,8 @@ import { toCachedImageSource } from '../../../shared/utils/media';
 import { useTheme } from '../../../shared/theme/useTheme';
 import { getItem, setItem } from '../../../services/storage/kvStorage';
 import { storageKeys } from '../../../config/storageKeys';
+import { brandMicrocopy, getZoneDeliveryMicrocopy } from '../../../shared/copy/brand-microcopy';
+import { getCatalog } from '../../../services/api/catalogApi';
 
 const HERO_IMAGE =
   'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=1400&q=80';
@@ -175,6 +177,7 @@ function ScrollRevealCard({
 
 export function HomeScreen({ navigation }: Props) {
   const logout = useAuthStore((s) => s.logout);
+  const selectedZoneId = useAvailabilityStore((s) => s.selectedZoneId);
   const selectedZone = useAvailabilityStore((s) => s.selectedZone);
   const { mode, toggleMode, colors } = useTheme();
   const isLight = mode === 'light';
@@ -183,6 +186,7 @@ export function HomeScreen({ navigation }: Props) {
   const [isSearchVisible, setIsSearchVisible] = React.useState(false);
   const [isSearchFocused, setIsSearchFocused] = React.useState(false);
   const [recentSuggestions, setRecentSuggestions] = React.useState<string[]>([]);
+  const [availableProductsCount, setAvailableProductsCount] = React.useState<number | null>(null);
   const searchInputRef = React.useRef<TextInput | null>(null);
   const scrollRef = React.useRef<React.ComponentRef<typeof Animated.ScrollView> | null>(null);
   const scrollY = useSharedValue(0);
@@ -324,6 +328,31 @@ export function HomeScreen({ navigation }: Props) {
     },
     []
   );
+
+  React.useEffect(() => {
+    let active = true;
+
+    const loadEcosystemState = async () => {
+      try {
+        const response = await getCatalog({
+          page: 1,
+          limit: 1,
+          zoneId: selectedZoneId ?? undefined
+        });
+        if (!active) return;
+        setAvailableProductsCount(Number.isFinite(response.total) ? response.total : response.data.length);
+      } catch {
+        if (!active) return;
+        setAvailableProductsCount(null);
+      }
+    };
+
+    void loadEcosystemState();
+
+    return () => {
+      active = false;
+    };
+  }, [selectedZoneId]);
 
   const topBarScrollStyle = useAnimatedStyle(() => ({
     transform: [
@@ -491,12 +520,12 @@ export function HomeScreen({ navigation }: Props) {
           <ImageBackground source={toCachedImageSource(HERO_IMAGE)} style={styles.hero} imageStyle={styles.heroImage}>
             <View style={styles.heroOverlay} />
             <View style={styles.heroContent}>
-              <AppText style={styles.zonePill}>Tu zona de hoy: {selectedZone?.name ?? 'Elige tu zona'}</AppText>
+              <AppText style={styles.zonePill}>{getZoneDeliveryMicrocopy(selectedZone?.name)}</AppText>
               <AppText style={[styles.deliveryMeta, isLight && { color: '#36403a' }]}>
                 Llega a tu puerta en <AppText style={styles.deliveryAccent}>30-60</AppText> min
               </AppText>
               <AppText style={[styles.heroEyebrow, isLight && { color: '#36403a' }]}>🌱 DE MANOS LOCALES</AppText>
-              <AppText style={[styles.heroTitle, isLight && { color: '#141916' }]}>Fresco, cercano y con origen real.</AppText>
+              <AppText style={[styles.heroTitle, isLight && { color: '#141916' }]}>{brandMicrocopy.home.heroHeader}</AppText>
               <AppText style={[styles.heroSubtitle, isLight && { color: '#2f3933' }]}>Compra directo a quienes cultivan con cuidado.</AppText>
               <AppButton
                 title={isLight ? 'Conocer productores' : 'Ver lo que llegó hoy'}
@@ -506,6 +535,39 @@ export function HomeScreen({ navigation }: Props) {
             </View>
           </ImageBackground>
         </Animated.View>
+
+        <ScrollRevealCard index={1} scrollY={scrollY}>
+          <View
+            style={[
+              styles.ecosystemCard,
+              {
+                backgroundColor: isLight ? '#4f7e5f' : '#447a56',
+                shadowColor: isLight ? '#2f5840' : '#163024'
+              }
+            ]}
+          >
+            <View
+              style={[
+                styles.ecosystemLeafAccent,
+                { backgroundColor: isLight ? 'rgba(232, 242, 236, 0.1)' : 'rgba(189, 226, 205, 0.08)' }
+              ]}
+            />
+            <AppText style={styles.ecosystemEyebrow}>ESTADO DEL ECOSISTEMA</AppText>
+            <AppText style={styles.ecosystemQuote}>
+              {availableProductsCount !== null
+                ? `Hoy tenemos ${availableProductsCount} productos disponibles en ${selectedZone?.name ?? 'tu zona'}, listos para tu canasta.`
+                : 'Estamos afinando la cosecha de hoy para mostrarte disponibilidad real en tu zona.'}
+            </AppText>
+            <View style={styles.ecosystemFooter}>
+              <View style={styles.ecosystemDot} />
+              <AppText style={styles.ecosystemMetric}>
+                {availableProductsCount !== null
+                  ? `${availableProductsCount} productos disponibles ahora`
+                  : 'Actualizando disponibilidad'}
+              </AppText>
+            </View>
+          </View>
+        </ScrollRevealCard>
 
         <Animated.View style={[styles.categoriesBlock, blockScrollStyle]}>
           <View style={styles.sectionTitleRow}>
@@ -848,25 +910,74 @@ const styles = StyleSheet.create({
     marginBottom: 8
   },
   heroTitle: {
-    fontSize: 48,
-    lineHeight: 52,
+    fontSize: 42,
+    lineHeight: 46,
     fontWeight: '800',
     color: '#f4f7f5',
     marginBottom: 10,
-    maxWidth: '74%'
+    maxWidth: '86%'
   },
   heroSubtitle: {
     color: '#deebe4',
-    fontSize: 15,
-    lineHeight: 21,
-    maxWidth: '72%',
-    marginBottom: 16
+    fontSize: 14,
+    lineHeight: 20,
+    maxWidth: '82%',
+    marginBottom: 14
   },
   heroCta: {
     alignSelf: 'flex-start',
-    borderRadius: 18,
-    paddingHorizontal: 18,
-    minHeight: 50
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    minHeight: 44
+  },
+  ecosystemCard: {
+    borderRadius: 26,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 14,
+    overflow: 'hidden',
+    gap: 12,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    elevation: 5
+  },
+  ecosystemLeafAccent: {
+    position: 'absolute',
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    right: -46,
+    bottom: -54
+  },
+  ecosystemEyebrow: {
+    color: 'rgba(240,246,242,0.85)',
+    letterSpacing: 1.8,
+    fontSize: 12,
+    fontWeight: '700'
+  },
+  ecosystemQuote: {
+    color: '#f2f6f3',
+    fontSize: 17,
+    lineHeight: 25,
+    fontWeight: '500'
+  },
+  ecosystemFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8
+  },
+  ecosystemDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: '#2dd082'
+  },
+  ecosystemMetric: {
+    color: '#ecf5ef',
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '700'
   },
   categoriesBlock: {
     gap: 12,

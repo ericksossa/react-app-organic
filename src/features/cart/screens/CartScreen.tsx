@@ -13,6 +13,7 @@ import { colors } from '../../../shared/theme/tokens';
 import { CartItem } from '../types';
 import { toCachedImageSource } from '../../../shared/utils/media';
 import { useTheme } from '../../../shared/theme/useTheme';
+import { brandMicrocopy } from '../../../shared/copy/brand-microcopy';
 
 type Props = NativeStackScreenProps<CartStackParamList, 'CartMain'>;
 
@@ -148,7 +149,7 @@ export function CartScreen({ navigation }: Props) {
             ${Number(total).toLocaleString('es-CO')}
           </Text>
         </View>
-        <AppButton title="Ir al checkout" onPress={() => navigation.navigate('Checkout')} />
+        <AppButton title={brandMicrocopy.buttons.checkout} onPress={() => navigation.navigate('Checkout')} />
       </View>
     </View>
   ) : null;
@@ -156,7 +157,7 @@ export function CartScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.bg }]}>
       <View style={styles.topHeader}>
-        <AppText style={styles.topHeaderTitle}>Tu canasta</AppText>
+        <AppText style={styles.topHeaderTitle}>{brandMicrocopy.buttons.cart}</AppText>
       </View>
       <View style={[styles.topDivider, { backgroundColor: themeColors.border1 }]} />
 

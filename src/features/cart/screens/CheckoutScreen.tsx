@@ -11,6 +11,7 @@ import { useCartStore } from '../../../state/cartStore';
 import { colors } from '../../../shared/theme/tokens';
 import { getErrorMessage } from '../../../shared/errors/apiError';
 import { useTheme } from '../../../shared/theme/useTheme';
+import { brandMicrocopy } from '../../../shared/copy/brand-microcopy';
 
 function toIsoOrUndefined(value: string): string | undefined {
   const parsed = value.trim();
@@ -88,7 +89,7 @@ export function CheckoutScreen() {
 
   return (
     <Screen>
-      <AppText variant="title">Confirma tu pedido</AppText>
+      <AppText variant="title">{brandMicrocopy.buttons.checkout}</AppText>
 
       <AppCard style={[styles.summaryCard, { backgroundColor: themeColors.surface1, borderColor: themeColors.border1 }]}>
         <AppText variant="heading">Resumen de tu compra</AppText>
@@ -186,10 +187,15 @@ export function CheckoutScreen() {
       </AppCard>
 
       {errorMessage ? <AppText style={[styles.errorText, { color: themeColors.danger, borderColor: themeColors.danger }]}>{errorMessage}</AppText> : null}
-      {createdOrderId ? <AppText style={{ color: '#89c8a3' }}>Tu pedido quedó creado: #{createdOrderId}</AppText> : null}
+      {createdOrderId ? (
+        <View style={{ gap: 4 }}>
+          <AppText style={{ color: '#89c8a3' }}>{brandMicrocopy.confirmations.orderCreated(createdOrderId)}</AppText>
+          <AppText style={[styles.meta, { color: themeColors.text2 }]}>{brandMicrocopy.confirmations.orderCreatedSecondary}</AppText>
+        </View>
+      ) : null}
 
       <AppButton
-        title={createOrderMutation.isPending ? 'Creando tu pedido...' : 'Confirmar pedido'}
+        title={createOrderMutation.isPending ? 'Creando tu pedido...' : brandMicrocopy.buttons.checkout}
         onPress={() => createOrderMutation.mutate()}
         disabled={!selectedAddressId || createOrderMutation.isPending || itemsCount === 0}
       />

@@ -4,6 +4,7 @@ const mockUseTheme = jest.fn();
 const mockGetItem = jest.fn();
 const mockSetItem = jest.fn();
 const mockUseFocusEffect = jest.fn();
+const mockGetCatalog = jest.fn();
 
 jest.mock('@expo/vector-icons', () => ({
   Feather: () => null
@@ -30,6 +31,10 @@ jest.mock('../../../services/storage/kvStorage', () => ({
   setItem: (...args: any[]) => mockSetItem(...args)
 }));
 
+jest.mock('../../../services/api/catalogApi', () => ({
+  getCatalog: (...args: any[]) => mockGetCatalog(...args)
+}));
+
 jest.mock('../../../shared/utils/media', () => ({
   toCachedImageSource: (uri: string) => ({ uri })
 }));
@@ -50,6 +55,7 @@ describe('HomeScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetItem.mockResolvedValue(null);
+    mockGetCatalog.mockResolvedValue({ page: 1, limit: 1, total: 24, data: [] });
     mockUseFocusEffect.mockImplementation((cb: any) => {
       const cleanup = cb();
       if (typeof cleanup === 'function') cleanup();
@@ -78,16 +84,20 @@ describe('HomeScreen', () => {
     const { getByText } = render(<HomeScreen navigation={navigation} route={{ key: 'k', name: 'HomeMain' } as any} />);
 
     expect(getByText('GreenCart')).toBeTruthy();
-    expect(getByText('Tu zona de hoy: Laureles')).toBeTruthy();
-    expect(getByText('Fresco, cercano y con origen real.')).toBeTruthy();
+    expect(getByText('Entregando en Laureles 🌿')).toBeTruthy();
+    expect(getByText('Hoy cosechamos algo especial para ti.')).toBeTruthy();
     expect(getByText('Compra directo a quienes cultivan con cuidado.')).toBeTruthy();
 
-    await waitFor(() => expect(mockGetItem).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(mockGetItem).toHaveBeenCalled();
+      expect(mockGetCatalog).toHaveBeenCalled();
+    });
   });
 
-  it('opens catalog from hero CTA', () => {
+  it('opens catalog from hero CTA', async () => {
     const { getByText } = render(<HomeScreen navigation={navigation} route={{ key: 'k', name: 'HomeMain' } as any} />);
 
+    await waitFor(() => expect(mockGetCatalog).toHaveBeenCalled());
     fireEvent.press(getByText('Ver lo que llegó hoy'));
     expect(parentNavigate).toHaveBeenCalledWith('CatalogTab');
   });

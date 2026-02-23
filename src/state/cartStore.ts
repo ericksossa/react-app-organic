@@ -3,6 +3,7 @@ import { CartSnapshot } from '../features/cart/types';
 import { addCartItem, getActiveCart, removeCartItem, setCartZone, updateCartItemQty } from '../services/api/cartApi';
 import { useAvailabilityStore } from './availabilityStore';
 import { getErrorMessage } from '../shared/errors/apiError';
+import { brandMicrocopy } from '../shared/copy/brand-microcopy';
 
 type CartState = {
   snapshot: CartSnapshot | null;
@@ -28,7 +29,7 @@ export const useCartStore = create<CartState>((set, get) => ({
       set({ snapshot, loading: false });
       await get().ensureZoneSynced();
     } catch (error) {
-      set({ loading: false, error: getErrorMessage(error, 'No se pudo cargar el carrito.') });
+      set({ loading: false, error: getErrorMessage(error, brandMicrocopy.errors.cartLoad) });
     }
   },
 
@@ -44,7 +45,7 @@ export const useCartStore = create<CartState>((set, get) => ({
       const refreshed = await getActiveCart();
       set({ snapshot: refreshed });
     } catch (error) {
-      set({ error: getErrorMessage(error, 'No se pudo sincronizar la zona del carrito.') });
+      set({ error: getErrorMessage(error, brandMicrocopy.errors.cartZoneSync) });
     }
   },
 
@@ -54,7 +55,7 @@ export const useCartStore = create<CartState>((set, get) => ({
       const refreshed = await getActiveCart();
       set({ snapshot: refreshed, error: null });
     } catch (error) {
-      set({ error: getErrorMessage(error, 'No se pudo agregar el producto al carrito.') });
+      set({ error: getErrorMessage(error, brandMicrocopy.errors.cartAdd) });
       throw new Error('add_item_failed');
     }
   },

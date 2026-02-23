@@ -77,11 +77,14 @@ export function LoginScreen({ navigation }: Props) {
           />
 
           <View style={styles.linksRow}>
-            <Pressable onPress={() => navigation.navigate('Register')}>
-              <AppText style={styles.link}>Quiero crear mi cuenta</AppText>
+            <Pressable
+              onPress={() => navigation.navigate('Register')}
+              style={styles.linkTap}
+            >
+              <AppText style={[styles.link, styles.linkPrimary]}>Quiero crear mi cuenta</AppText>
             </Pressable>
-            <Pressable>
-              <AppText style={styles.link}>Necesito recuperar mi contraseña</AppText>
+            <Pressable style={styles.linkTap}>
+              <AppText style={[styles.link, styles.linkSecondary]}>Necesito recuperar mi contraseña</AppText>
             </Pressable>
           </View>
         </View>
@@ -130,10 +133,10 @@ const styles = StyleSheet.create({
     paddingBottom: 16
   },
   brand: {
-    color: 'rgba(206,218,211,0.62)',
+    color: '#8fd8ba',
     letterSpacing: 1.8,
     fontSize: 11,
-    marginBottom: 6
+    marginBottom: 8
   },
   title: {
     fontSize: 33,
@@ -143,13 +146,13 @@ const styles = StyleSheet.create({
     color: '#e8efea'
   },
   subtitle: {
-    color: 'rgba(198,211,203,0.9)',
+    color: '#cce0d5',
     fontSize: 16,
     lineHeight: 22,
-    marginBottom: 14
+    marginBottom: 16
   },
   label: {
-    color: 'rgba(191,204,197,0.88)',
+    color: '#b6cec2',
     fontSize: 14,
     marginBottom: 6
   },
@@ -188,13 +191,25 @@ const styles = StyleSheet.create({
     elevation: 4
   },
   linksRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    marginTop: 2,
+    gap: 8
+  },
+  linkTap: {
+    minHeight: 28,
     alignItems: 'center',
-    gap: 12
+    justifyContent: 'center'
   },
   link: {
-    color: 'rgba(216,225,220,0.85)',
-    fontSize: 15
+    fontSize: 14,
+    lineHeight: 18,
+    textAlign: 'center'
+  },
+  linkPrimary: {
+    color: '#9fe7c8',
+    fontWeight: '700'
+  },
+  linkSecondary: {
+    color: '#ffd08c',
+    fontWeight: '700'
   }
 });

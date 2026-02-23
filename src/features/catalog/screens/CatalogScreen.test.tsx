@@ -124,7 +124,7 @@ describe('CatalogScreen', () => {
 
     const { getByText } = render(<CatalogScreen navigation={navigation} route={{ key: 'k', name: 'CatalogMain', params: {} } as any} />);
 
-    expect(getByText('No encontramos coincidencias en tu zona. Prueba otro filtro.')).toBeTruthy();
+    expect(getByText('Esta zona está descansando hoy. Algo nuevo está creciendo.')).toBeTruthy();
   });
 
   it('adds featured product to cart using fallback product detail variant', async () => {
@@ -156,9 +156,9 @@ describe('CatalogScreen', () => {
     addItem.mockResolvedValue(undefined);
     mockGetProductBySlug.mockResolvedValue({ variants: [{ id: 'v-1' }] });
 
-    const { getByText } = render(<CatalogScreen navigation={navigation} route={{ key: 'k', name: 'CatalogMain', params: {} } as any} />);
+    const { getAllByText } = render(<CatalogScreen navigation={navigation} route={{ key: 'k', name: 'CatalogMain', params: {} } as any} />);
 
-    fireEvent.press(getByText('Quiero esta cosecha'));
+    fireEvent.press(getAllByText('Llévalo a mi canasta')[0]);
 
     await waitFor(() => {
       expect(mockGetProductBySlug).toHaveBeenCalledWith('tomate', 'z1');

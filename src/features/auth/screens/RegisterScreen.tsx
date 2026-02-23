@@ -121,8 +121,9 @@ export function RegisterScreen({ navigation }: Props) {
             style={styles.cta}
           />
 
-          <Pressable onPress={() => navigation.navigate('Login')}>
-            <AppText style={styles.backLink}>Ya tengo cuenta, quiero entrar</AppText>
+          <Pressable onPress={() => navigation.navigate('Login')} style={styles.loginTextCta}>
+            <AppText style={styles.loginCtaTitle}>Ya tengo cuenta</AppText>
+            <AppText style={styles.loginCtaSubtitle}>Entrar a GreenCart</AppText>
           </Pressable>
         </View>
       </KeyboardAvoidingView>
@@ -192,7 +193,7 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#e3eee7',
+    backgroundColor: '#8fd8ba',
     marginRight: 6
   },
   dotInactive: {
@@ -204,17 +205,17 @@ const styles = StyleSheet.create({
   },
   stepActive: {
     fontSize: 14,
-    color: '#e3eee7'
+    color: '#cfe9dd'
   },
   stepInactive: {
     fontSize: 14,
     color: 'rgba(216,225,220,0.7)'
   },
   eyebrow: {
-    color: 'rgba(206,218,211,0.62)',
+    color: '#8fd8ba',
     letterSpacing: 1.8,
     fontSize: 11,
-    marginBottom: 6
+    marginBottom: 8
   },
   title: {
     fontSize: 33,
@@ -224,13 +225,13 @@ const styles = StyleSheet.create({
     color: '#e8efea'
   },
   subtitle: {
-    color: 'rgba(198,211,203,0.9)',
+    color: '#cce0d5',
     fontSize: 16,
     lineHeight: 22,
-    marginBottom: 14
+    marginBottom: 16
   },
   label: {
-    color: 'rgba(191,204,197,0.88)',
+    color: '#b6cec2',
     fontSize: 14,
     marginBottom: 6,
     marginTop: 2
@@ -259,7 +260,7 @@ const styles = StyleSheet.create({
     fontSize: 14
   },
   ok: {
-    color: '#9fd0b7',
+    color: '#9fe7c8',
     marginTop: 2,
     marginBottom: 8,
     fontSize: 14
@@ -276,8 +277,23 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     elevation: 4
   },
-  backLink: {
-    color: 'rgba(216,225,220,0.85)',
-    fontSize: 15
+  loginTextCta: {
+    marginTop: 2,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 1
+  },
+  loginCtaTitle: {
+    color: '#ffd08c',
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: '700'
+  },
+  loginCtaSubtitle: {
+    color: '#fff1d5',
+    fontSize: 15,
+    lineHeight: 18,
+    fontWeight: '700'
   }
 });

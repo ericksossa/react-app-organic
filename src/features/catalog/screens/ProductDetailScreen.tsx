@@ -19,6 +19,7 @@ import { useCartStore } from '../../../state/cartStore';
 import { colors } from '../../../shared/theme/tokens';
 import { toCachedImageSource } from '../../../shared/utils/media';
 import { useTheme } from '../../../shared/theme/useTheme';
+import { brandMicrocopy } from '../../../shared/copy/brand-microcopy';
 
 type Props = NativeStackScreenProps<CatalogStackParamList, 'ProductDetail'>;
 
@@ -51,7 +52,7 @@ export function ProductDetailScreen({ route, navigation }: Props) {
       await addItem({ variantId: selectedVariant.id, qty: 1 });
     },
     onError: () => {
-      setError('No pudimos llevarlo a tu canasta. Intenta otra vez.');
+      setError(brandMicrocopy.errors.addToBasketFromDetail);
     }
   });
 
@@ -173,7 +174,11 @@ export function ProductDetailScreen({ route, navigation }: Props) {
               </View>
 
               <AppButton
-                title={addMutation.isPending ? 'Llevando a tu canasta...' : 'Llévalo a mi canasta'}
+                title={
+                  addMutation.isPending
+                    ? brandMicrocopy.buttons.addToBasketLoading
+                    : brandMicrocopy.buttons.addToBasket
+                }
                 onPress={() => addMutation.mutate()}
                 disabled={addMutation.isPending || !selectedVariant}
                 style={styles.addCta}

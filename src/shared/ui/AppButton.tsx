@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, PressableProps, StyleProp, ViewStyle } from 'react-native';
+import { Pressable, PressableProps, StyleProp, TextStyle, ViewStyle } from 'react-native';
 import { AppText } from './AppText';
 import { spacing } from '../theme/tokens';
 import { useTheme } from '../theme/useTheme';
@@ -8,9 +8,18 @@ type Props = Omit<PressableProps, 'style'> & {
   title: string;
   tone?: 'primary' | 'ghost';
   style?: StyleProp<ViewStyle>;
+  titleStyle?: StyleProp<TextStyle>;
+  titleNumberOfLines?: number;
 };
 
-export function AppButton({ title, tone = 'primary', style, ...props }: Props) {
+export function AppButton({
+  title,
+  tone = 'primary',
+  style,
+  titleStyle,
+  titleNumberOfLines,
+  ...props
+}: Props) {
   const { colors } = useTheme();
   const backgroundColor = tone === 'primary' ? colors.cta : 'transparent';
   const borderWidth = tone === 'ghost' ? 1 : 0;
@@ -32,7 +41,12 @@ export function AppButton({ title, tone = 'primary', style, ...props }: Props) {
         style
       ]}
     >
-      <AppText style={{ color: tone === 'primary' ? colors.ctaText : colors.text1 }}>{title}</AppText>
+      <AppText
+        numberOfLines={titleNumberOfLines}
+        style={[{ color: tone === 'primary' ? colors.ctaText : colors.text1 }, titleStyle]}
+      >
+        {title}
+      </AppText>
     </Pressable>
   );
 }

@@ -30,6 +30,7 @@ import { toCachedImageSource } from '../../../shared/utils/media';
 import { useTheme } from '../../../shared/theme/useTheme';
 import { getItem, setItem } from '../../../services/storage/kvStorage';
 import { storageKeys } from '../../../config/storageKeys';
+import { brandMicrocopy, getZoneDeliveryMicrocopy } from '../../../shared/copy/brand-microcopy';
 import Animated, {
   Easing,
   Extrapolation,
@@ -129,6 +130,7 @@ const CatalogRow = React.memo(function CatalogRow({
 }) {
   const { colors: themeColors, isDark } = useTheme();
   const isAvailable = index % 4 !== 0;
+  const imagePressProgress = useSharedValue(0);
   const rowScrollStyle = useAnimatedStyle(() => {
     const rowIndex = Math.floor(index / 2);
     const revealStart = rowIndex * 56;
@@ -181,6 +183,13 @@ const CatalogRow = React.memo(function CatalogRow({
       elevation: CATALOG_CARD_ELEVATION * depthStrength
     };
   }, [index, scrollY]);
+  const imageZoomStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        scale: interpolate(imagePressProgress.value, [0, 1], [1.045, 1.095], Extrapolation.CLAMP)
+      }
+    ]
+  }));
 
   return (
     <Animated.View
@@ -208,12 +217,24 @@ const CatalogRow = React.memo(function CatalogRow({
           rowScrollStyle
         ]}
       >
-        <Pressable onPress={() => onOpen(item.slug)}>
-          {item.imageUrl ? (
-            <Image source={toCachedImageSource(item.imageUrl)} style={styles.productImage} resizeMode="cover" />
-          ) : (
-            <View style={styles.imageFallback} />
-          )}
+        <Pressable
+          onPress={() => onOpen(item.slug)}
+          onPressIn={() => {
+            imagePressProgress.value = withTiming(1, { duration: 180 });
+          }}
+          onPressOut={() => {
+            imagePressProgress.value = withTiming(0, { duration: 220 });
+          }}
+        >
+          <View style={styles.productImageViewport}>
+            <Animated.View style={[styles.productImageZoomWrap, imageZoomStyle]}>
+              {item.imageUrl ? (
+                <Image source={toCachedImageSource(item.imageUrl)} style={styles.productImage} resizeMode="cover" />
+              ) : (
+                <View style={styles.imageFallback} />
+              )}
+            </Animated.View>
+          </View>
           <View style={styles.productMeta}>
             <AppText style={[styles.productName, { color: themeColors.text1 }]} numberOfLines={1}>
               {item.name}
@@ -239,10 +260,12 @@ const CatalogRow = React.memo(function CatalogRow({
           </View>
         </Pressable>
         <AppButton
-          title={adding ? 'Llevando...' : 'Llévalo'}
+          title={adding ? brandMicrocopy.buttons.addToBasketLoading : brandMicrocopy.buttons.addToBasket}
           onPress={() => onAdd(item)}
           disabled={adding}
           style={styles.cardAddButton}
+          titleStyle={styles.cardAddButtonText}
+          titleNumberOfLines={2}
         />
       </Animated.View>
     </Animated.View>
@@ -340,7 +363,7 @@ export function CatalogScreen({ navigation, route }: Props) {
 
         await addItem({ variantId, qty: 1 });
       } catch {
-        setAddError('No pudimos llevar este producto a tu canasta.');
+        setAddError(brandMicrocopy.errors.addToBasketFromCatalog);
       } finally {
         setAddingProductId(null);
       }
@@ -641,8 +664,7 @@ export function CatalogScreen({ navigation, route }: Props) {
               <AppText style={[styles.zoneBadgeText, { color: isDark ? '#d3ebdc' : '#1f6a4e' }]}>Zona de entrega</AppText>
             </Animated.View>
             <AppText style={[styles.zoneText, { color: themeColors.text1 }]}>
-              {selectedZone?.city ? `${selectedZone.city} / ` : ''}
-              {selectedZone?.name ?? 'Elige tu zona'}
+              {getZoneDeliveryMicrocopy(selectedZone?.name)}
             </AppText>
             <Animated.View style={zoneChevronAnimStyle}>
               <View style={[styles.zoneChevronWrap, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]}>
@@ -780,17 +802,23 @@ export function CatalogScreen({ navigation, route }: Props) {
         <ImageBackground
           source={toCachedImageSource(featured.imageUrl)}
           style={styles.featuredCard}
-          imageStyle={styles.featuredImage}
+          imageStyle={[styles.featuredImage, styles.featuredImageZoom]}
         >
           <View style={[styles.featuredOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.12)' }]} />
           <View style={styles.featuredContent}>
             <AppText style={styles.featuredEyebrow}>Selección de hoy</AppText>
             <AppText style={styles.featuredName}>{featured.name}</AppText>
             <AppButton
-              title={addingProductId === featured.id ? 'Llevando...' : 'Quiero esta cosecha'}
+              title={
+                addingProductId === featured.id
+                  ? brandMicrocopy.buttons.addToBasketLoading
+                  : brandMicrocopy.buttons.addToBasket
+              }
               onPress={() => void handleAddFromCatalog(featured)}
               disabled={addingProductId === featured.id}
               style={styles.addButton}
+              titleStyle={styles.addButtonText}
+              titleNumberOfLines={1}
             />
           </View>
         </ImageBackground>
@@ -798,7 +826,7 @@ export function CatalogScreen({ navigation, route }: Props) {
 
       {!catalogQuery.isLoading && !catalogQuery.isError && products.length === 0 ? (
         <AppCard style={{ backgroundColor: themeColors.surface1, borderColor: themeColors.border1 }}>
-          <AppText>No encontramos coincidencias en tu zona. Prueba otro filtro.</AppText>
+          <AppText>{brandMicrocopy.states.noProductsAvailable}</AppText>
         </AppCard>
       ) : null}
     </View>
@@ -1081,6 +1109,9 @@ const styles = StyleSheet.create({
   featuredImage: {
     borderRadius: 22
   },
+  featuredImageZoom: {
+    transform: [{ scale: 1.05 }]
+  },
   featuredOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.22)'
@@ -1105,9 +1136,21 @@ const styles = StyleSheet.create({
   },
   addButton: {
     alignSelf: 'flex-start',
-    borderRadius: 12,
-    minHeight: 38,
-    paddingHorizontal: 20
+    borderRadius: 14,
+    minHeight: 40,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(232, 246, 238, 0.92)',
+    shadowColor: '#0f2d22',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    elevation: 4
+  },
+  addButtonText: {
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: '700',
+    letterSpacing: 0.2
   },
   productCard: {
     flex: 1,
@@ -1138,6 +1181,14 @@ const styles = StyleSheet.create({
     height: 120,
     backgroundColor: colors.surface2
   },
+  productImageViewport: {
+    overflow: 'hidden',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16
+  },
+  productImageZoomWrap: {
+    width: '100%'
+  },
   imageFallback: {
     width: '100%',
     height: 120,
@@ -1151,7 +1202,25 @@ const styles = StyleSheet.create({
   },
   cardAddButton: {
     marginHorizontal: 10,
-    marginBottom: 10
+    marginBottom: 10,
+    borderRadius: 14,
+    minHeight: 40,
+    paddingHorizontal: 10,
+    backgroundColor: 'rgba(221, 242, 232, 0.9)',
+    borderWidth: 1,
+    borderColor: 'rgba(40, 179, 130, 0.22)',
+    shadowColor: '#0d271d',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.16,
+    shadowRadius: 10,
+    elevation: 3
+  },
+  cardAddButtonText: {
+    fontSize: 12,
+    lineHeight: 15,
+    fontWeight: '700',
+    textAlign: 'center',
+    letterSpacing: 0.15
   },
   productPrice: {
     fontWeight: '700',

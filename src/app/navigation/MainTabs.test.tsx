@@ -72,7 +72,7 @@ describe('MainTabs', () => {
 
     const labels = iconRenderProps.map((props) => props.label);
     expect(labels).toContain('Inicio');
-    expect(labels).toContain('Mercado');
+    expect(labels).toContain('Cosecha');
     expect(labels).toContain('Canasta');
   });
 
