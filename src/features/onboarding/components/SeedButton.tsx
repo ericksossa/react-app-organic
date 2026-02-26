@@ -1,5 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, View, type Insets } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import Animated, {
   cancelAnimation,
   Easing,
@@ -45,6 +46,7 @@ export function SeedButton({
   const [isAnimating, setIsAnimating] = React.useState(false);
 
   const press = useSharedValue(0);
+  const slide = useSharedValue(0);
   const crack = useSharedValue(0);
   const split = useSharedValue(0);
   const stem = useSharedValue(0);
@@ -63,6 +65,11 @@ export function SeedButton({
   }, [onPress]);
 
   const animateReduceMotion = React.useCallback(() => {
+    slide.value = withSequence(
+      withTiming(1, { duration: motionDuration('micro', true) }),
+      withTiming(0.18, { duration: motionDuration('micro', true) }),
+      withTiming(0, { duration: motionDuration('short', true) })
+    );
     press.value = withSequence(
       withTiming(1, { duration: motionDuration('micro', true) }),
       withTiming(0, { duration: motionDuration('short', true) }, (finished) => {
@@ -70,10 +77,15 @@ export function SeedButton({
         runOnJS(triggerNavigation)();
       })
     );
-  }, [press, triggerNavigation]);
+  }, [press, slide, triggerNavigation]);
 
   const animateGermination = React.useCallback(() => {
     // Stage 1: micro press
+    slide.value = withSequence(
+      withTiming(1, { duration: GERMINATION_MS.pressA, easing: motionEasings.enter }),
+      withTiming(0.2, { duration: 110, easing: Easing.out(Easing.quad) }),
+      withTiming(0, { duration: 150, easing: motionEasings.organic })
+    );
     press.value = withSequence(
       withTiming(1, { duration: GERMINATION_MS.pressA, easing: motionEasings.enter }),
       withTiming(0, { duration: GERMINATION_MS.pressB, easing: motionEasings.organic })
@@ -133,12 +145,14 @@ export function SeedButton({
       duration: GERMINATION_MS.leafGrow + GERMINATION_MS.settle,
       easing: motionEasings.organic
     });
-  }, [crack, glow, halo, leaf, press, root, soil, split, stem, triggerNavigation]);
+  }, [crack, glow, halo, leaf, press, root, slide, soil, split, stem, triggerNavigation]);
 
   React.useEffect(() => {
-    if (reduceMotion || isAnimating) {
+        if (reduceMotion || isAnimating) {
       cancelAnimation(idle);
+      cancelAnimation(slide);
       idle.value = 0;
+      slide.value = 0;
       return;
     }
 
@@ -159,9 +173,11 @@ export function SeedButton({
 
     return () => {
       cancelAnimation(idle);
+      cancelAnimation(slide);
       idle.value = 0;
+      slide.value = 0;
     };
-  }, [idle, isAnimating, reduceMotion]);
+  }, [idle, isAnimating, reduceMotion, slide]);
 
   const handlePress = React.useCallback(() => {
     if (locked) return;
@@ -177,6 +193,9 @@ export function SeedButton({
 
   const rootStyle = useAnimatedStyle(() => ({
     transform: [
+      {
+        translateX: interpolate(slide.value, [0, 1], [0, 22], Extrapolation.CLAMP)
+      },
       {
         scale: interpolate(press.value, [0, 1], [1, 0.96], Extrapolation.CLAMP)
       }
@@ -312,7 +331,7 @@ export function SeedButton({
     ]
   }));
 
-  const tomatoShineStyle = useAnimatedStyle(() => ({
+  const ctaShineStyle = useAnimatedStyle(() => ({
     opacity: interpolate(press.value, [0, 0.15, 0.7, 1], [0, 0.12, 0.18, 0], Extrapolation.CLAMP),
     transform: [
       { rotate: '-18deg' },
@@ -363,15 +382,11 @@ export function SeedButton({
           <View style={styles.premiumGloss} />
           <View style={styles.premiumSpecular} />
           <Animated.View style={[styles.premiumIconWrap, premiumIconStyle]}>
-            <View style={styles.tomatoBody}>
-              <View style={styles.tomatoOutline} />
-              <View style={styles.tomatoBodyShade} />
-              <View style={styles.tomatoGloss} />
-              <Animated.View style={[styles.tomatoShineSweep, tomatoShineStyle]} />
-              <View style={styles.tomatoStem} />
-              <View style={[styles.tomatoLeaf, styles.tomatoLeafA]} />
-              <View style={[styles.tomatoLeaf, styles.tomatoLeafB]} />
-              <View style={[styles.tomatoLeaf, styles.tomatoLeafC]} />
+            <View style={styles.continueChip}>
+              <Animated.View style={[styles.continueShineSweep, ctaShineStyle]} />
+              <View style={styles.continueIconWrap}>
+                <Feather name="chevron-right" size={14} color="#ecf7ef" />
+              </View>
             </View>
           </Animated.View>
         </Animated.View>
@@ -382,7 +397,7 @@ export function SeedButton({
 
 const styles = StyleSheet.create({
   rootWrap: {
-    marginTop: -50,
+    marginTop: 0,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'visible'
@@ -398,11 +413,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   buttonShell: {
-    backgroundColor: '#163424',
+    backgroundColor: 'rgba(15, 34, 24, 0.4)',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'visible',
-    shadowColor: '#07110c',
+    borderWidth: 1,
+    borderColor: 'rgba(231, 247, 238, 0.08)',
+    shadowColor: '#040a07',
     shadowOffset: { width: 0, height: 10 },
     shadowRadius: 14,
     elevation: 5
@@ -413,8 +430,8 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 999,
     borderWidth: 1.2,
-    borderColor: 'rgba(198, 255, 219, 0.18)',
-    backgroundColor: 'rgba(49, 126, 87, 0.18)'
+    borderColor: 'rgba(228, 250, 237, 0.16)',
+    backgroundColor: 'rgba(198, 255, 219, 0.05)'
   },
   premiumShadowInset: {
     position: 'absolute',
@@ -422,16 +439,16 @@ const styles = StyleSheet.create({
     height: '92%',
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(4, 14, 10, 0.18)'
+    borderColor: 'rgba(5, 14, 10, 0.22)'
   },
   premiumCore: {
     position: 'absolute',
     width: '74%',
     height: '74%',
     borderRadius: 999,
-    backgroundColor: '#1f6a47',
+    backgroundColor: 'rgba(203, 244, 219, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(196, 251, 214, 0.14)'
+    borderColor: 'rgba(239, 254, 245, 0.09)'
   },
   premiumGloss: {
     position: 'absolute',
@@ -460,92 +477,45 @@ const styles = StyleSheet.create({
     backgroundColor: '#79e8a8'
   },
   premiumIconWrap: {
-    width: '42%',
-    height: '42%',
+    width: '58%',
+    height: '58%',
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(224, 255, 236, 0.06)',
+    backgroundColor: 'rgba(226, 255, 238, 0.05)',
     borderWidth: 1,
-    borderColor: 'rgba(236, 255, 244, 0.08)'
+    borderColor: 'rgba(236, 255, 244, 0.08)',
+    overflow: 'hidden'
   },
-  tomatoBody: {
+  continueChip: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(231, 251, 239, 0.07)',
+    borderWidth: 1,
+    borderColor: 'rgba(243, 255, 248, 0.08)',
+    overflow: 'hidden'
+  },
+  continueShineSweep: {
+    position: 'absolute',
+    width: 10,
+    height: '180%',
+    left: 6,
+    top: '-35%',
+    borderRadius: 999,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)'
+  },
+  continueIconWrap: {
     width: 22,
     height: 22,
-    borderRadius: 999,
-    backgroundColor: '#e24c42',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 229, 226, 0.18)',
+    borderRadius: 11,
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    overflow: 'visible'
-  },
-  tomatoOutline: {
-    position: 'absolute',
-    top: -1,
-    left: -1,
-    right: -1,
-    bottom: -1,
-    borderRadius: 999,
+    justifyContent: 'center',
+    backgroundColor: 'rgba(233, 252, 241, 0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(247, 255, 250, 0.14)'
-  },
-  tomatoBodyShade: {
-    position: 'absolute',
-    width: 13,
-    height: 9,
-    right: 1,
-    bottom: 2,
-    borderRadius: 999,
-    backgroundColor: 'rgba(109, 21, 18, 0.24)',
-    transform: [{ rotate: '12deg' }]
-  },
-  tomatoGloss: {
-    position: 'absolute',
-    width: 8,
-    height: 5,
-    top: 3,
-    left: 5,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255, 244, 242, 0.28)',
-    transform: [{ rotate: '-18deg' }]
-  },
-  tomatoShineSweep: {
-    position: 'absolute',
-    width: 5,
-    height: 20,
-    top: 1,
-    left: 9,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255, 255, 255, 0.28)'
-  },
-  tomatoStem: {
-    position: 'absolute',
-    width: 2.4,
-    height: 6,
-    top: -4,
-    borderRadius: 999,
-    backgroundColor: '#92e584'
-  },
-  tomatoLeaf: {
-    position: 'absolute',
-    width: 8,
-    height: 3.6,
-    top: -2,
-    borderRadius: 999,
-    backgroundColor: '#69d26f'
-  },
-  tomatoLeafA: {
-    width: 8.5,
-    transform: [{ rotate: '0deg' }]
-  },
-  tomatoLeafB: {
-    left: 1,
-    transform: [{ rotate: '-32deg' }]
-  },
-  tomatoLeafC: {
-    right: 1,
-    transform: [{ rotate: '32deg' }]
+    borderColor: 'rgba(244, 255, 249, 0.08)'
   },
   stem: {
     position: 'absolute',
