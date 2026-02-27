@@ -13,6 +13,8 @@ type VoiceSeedButtonProps = {
   backgroundColor: string;
   iconColor: string;
   borderColor: string;
+  size?: number;
+  iconSize?: number;
 };
 
 export const VoiceSeedButton = React.memo(function VoiceSeedButton({
@@ -23,7 +25,9 @@ export const VoiceSeedButton = React.memo(function VoiceSeedButton({
   onPress,
   backgroundColor,
   iconColor,
-  borderColor
+  borderColor,
+  size = 34,
+  iconSize = 16
 }: VoiceSeedButtonProps) {
   const scale = useSharedValue(1);
 
@@ -50,6 +54,11 @@ export const VoiceSeedButton = React.memo(function VoiceSeedButton({
         }}
         onPress={onPress}
         style={({ pressed }) => [
+          {
+            width: size,
+            height: size,
+            borderRadius: size / 2
+          },
           styles.seed,
           {
             opacity: disabled ? 0.55 : pressed ? 0.88 : 1,
@@ -59,7 +68,7 @@ export const VoiceSeedButton = React.memo(function VoiceSeedButton({
         ]}
       >
         <View style={styles.iconWrap}>
-          <Feather name={isProcessing ? 'loader' : isListening ? 'radio' : 'mic'} size={16} color={iconColor} />
+          <Feather name={isProcessing ? 'loader' : isListening ? 'radio' : 'mic'} size={iconSize} color={iconColor} />
         </View>
       </Pressable>
     </Animated.View>
@@ -68,9 +77,6 @@ export const VoiceSeedButton = React.memo(function VoiceSeedButton({
 
 const styles = StyleSheet.create({
   seed: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center'

@@ -23,7 +23,12 @@ function triggerHaptic(kind: 'start' | 'stop' | 'error') {
   }
 }
 
+const EARCON_ENABLED =
+  (process.env.EXPO_PUBLIC_VOICE_EARCON ?? process.env.VOICE_EARCON ?? 'false').toLowerCase() === 'true';
+
 function triggerEarcon(kind: 'start' | 'success' | 'error') {
+  if (!EARCON_ENABLED) return;
+
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const tts = require('react-native-tts');

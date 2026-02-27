@@ -1,22 +1,20 @@
 import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
-import { useIsFocused } from '@react-navigation/native';
-import { Feather } from '@expo/vector-icons';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { useReducedMotionSetting } from '../../../design/motion/useReducedMotionSetting';
 import { getCatalog, getProductBySlug } from '../../../services/api/catalogApi';
 import { useAvailabilityStore } from '../../../state/availabilityStore';
 import { useCartStore } from '../../../state/cartStore';
-import { useTheme } from '../../../shared/theme/useTheme';
-import { AppText } from '../../../shared/ui/AppText';
 import { buildSafeVoicePayload } from '../analytics/voiceEvents';
 import { VoiceCandidate, VoiceIntentType } from '../domain/intents';
 import { VoiceClient } from '../services/VoiceClient';
 import { PicovoiceSttProvider } from '../services/stt/PicovoiceSttProvider';
 import { NoopTtsService } from '../services/tts/TtsService';
 import { useVoiceAssistant } from '../state/useVoiceAssistant';
+import { VoiceCard } from './VoiceCard';
+import { VoiceDock } from './VoiceDock';
 import { VoiceOrb } from './VoiceOrb';
-import { VoiceSeedButton } from './VoiceSeedButton';
-import { VoiceSheet } from './VoiceSheet';
+import { VoiceStatus } from './VoiceStatus';
 import { useVoiceEnergy } from './useVoiceEnergy';
 
 type VoiceOrbScreenProps = {
@@ -37,21 +35,40 @@ function normalizeSearchText(value: string): string {
     .trim();
 }
 
-function statusCopy(status: ReturnType<typeof useVoiceAssistant>['status']): string {
+function topCopy(status: ReturnType<typeof useVoiceAssistant>['status']): string {
   switch (status) {
     case 'listening':
-      return 'Listening…';
+      return 'Escuchando…';
     case 'processing':
       return 'Procesando…';
     case 'review':
-      return 'Revisa antes de ejecutar';
+      return 'Revisa lo que entendí';
     case 'error':
-      return 'No te escuché bien';
-    case 'success':
-      return 'Listo';
+      return 'No te escuché bien, intenta de nuevo';
     default:
       return 'Toca el micrófono para hablar';
   }
+}
+
+function resolveTranscriptPreview({
+  status,
+  transcript,
+  draftTranscript
+}: {
+  status: ReturnType<typeof useVoiceAssistant>['status'];
+  transcript: string;
+  draftTranscript: string;
+}): string {
+  if (status === 'review' && draftTranscript.trim()) return draftTranscript.trim();
+  if (transcript.trim()) return transcript.trim();
+  if (status === 'listening') return 'Te escucho...';
+  return '';
+}
+
+function unsupportedCopy(intent: VoiceIntentType | null): string {
+  if (intent === 'REPEAT_LAST_ORDER') return 'Aún no disponible: repetir última compra.';
+  if (intent === 'TRACK_ORDER') return 'Aún no disponible: seguimiento de pedido.';
+  return 'Aún no disponible.';
 }
 
 export function VoiceOrbScreen({
@@ -63,12 +80,19 @@ export function VoiceOrbScreen({
   onOpenCatalog,
   onOpenOrders
 }: VoiceOrbScreenProps) {
-  const { colors, isDark } = useTheme();
   const isFocused = useIsFocused();
   const reduceMotion = useReducedMotionSetting();
   const zoneId = useAvailabilityStore((s) => s.selectedZoneId);
   const addItem = useCartStore((s) => s.addItem);
   const wasFocusedRef = React.useRef(isFocused);
+  const [animationsActive, setAnimationsActive] = React.useState(true);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      setAnimationsActive(true);
+      return () => setAnimationsActive(false);
+    }, [])
+  );
 
   const inactiveClient = React.useMemo(
     () =>
@@ -198,86 +222,121 @@ export function VoiceOrbScreen({
 
   const energy = useVoiceEnergy(voice.status, voice.transcript, reduceMotion);
   const disabled = !enabled || !voiceClient;
+  const transcriptPreview = resolveTranscriptPreview({
+    status: voice.status,
+    transcript: voice.transcript,
+    draftTranscript: voice.draftTranscript
+  });
+  const showReviewEditor = voice.status === 'review';
+  const showTopMatches = showReviewEditor && voice.candidates.length > 1;
+  const showUnsupported = Boolean(voice.unsupportedIntent);
+  const showError = voice.status === 'error' && Boolean(voice.error);
+  const showOpenOrders = voice.unsupportedIntent === 'REPEAT_LAST_ORDER' || voice.unsupportedIntent === 'TRACK_ORDER';
 
   return (
     <View style={styles.container}>
-      <View style={[styles.bgLayer, styles.bgA, { backgroundColor: isDark ? '#0f1f1a' : '#e9f6ee' }]} />
-      <View style={[styles.bgLayer, styles.bgB, { backgroundColor: isDark ? 'rgba(49,129,101,0.24)' : 'rgba(77,214,152,0.27)' }]} />
-      <View style={[styles.bgLayer, styles.bgC, { backgroundColor: isDark ? 'rgba(88,118,229,0.16)' : 'rgba(120,170,255,0.18)' }]} />
+      <VoiceCard
+        top={
+          <Text numberOfLines={1} style={styles.topLabel}>
+            {topCopy(voice.status)}
+          </Text>
+        }
+        center={<VoiceOrb status={voice.status} voiceEnergy={energy} reduceMotion={reduceMotion} active={animationsActive} />}
+        bottom={
+          <View style={styles.bottomArea}>
+            <VoiceStatus status={voice.status} />
+            {transcriptPreview ? (
+              <Text style={styles.transcript} numberOfLines={2} ellipsizeMode="tail">
+                {transcriptPreview}
+              </Text>
+            ) : (
+              <View style={styles.transcriptSpacer} />
+            )}
 
-      <View style={styles.topState}>
-        <AppText style={[styles.stateText, { color: colors.text2 }]}>{statusCopy(voice.status)}</AppText>
-      </View>
+            {showReviewEditor ? (
+              <View style={styles.reviewPanel}>
+                <TextInput
+                  value={voice.draftTranscript}
+                  onChangeText={voice.setDraftTranscript}
+                  placeholder="Edita lo que entendí"
+                  placeholderTextColor="rgba(28,28,30,0.45)"
+                  style={styles.reviewInput}
+                  autoCapitalize="sentences"
+                  autoCorrect
+                />
 
-      <View style={styles.orbWrap}>
-        <VoiceOrb size={264} status={voice.status} voiceEnergy={energy} reduceMotion={reduceMotion} />
-      </View>
+                {showTopMatches ? (
+                  <View style={styles.candidatesRow}>
+                    {voice.candidates.slice(0, 3).map((candidate) => (
+                      <Pressable
+                        key={candidate.id}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Seleccionar ${candidate.name}`}
+                        style={styles.candidatePill}
+                        onPress={() => {
+                          void voice.selectCandidateAndRun(candidate);
+                        }}
+                      >
+                        <Text numberOfLines={1} style={styles.candidateText}>
+                          {candidate.name}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : null}
 
-      <View style={styles.transcriptWrap}>
-        <AppText
-          style={[styles.transcript, { color: colors.text1 }]}
-          numberOfLines={2}
-          ellipsizeMode="tail"
-        >
-          {voice.transcript || 'Te escucho…'}
-        </AppText>
-      </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Confirmar transcripción"
+                  onPress={() => {
+                    void voice.confirmDraftAndRun();
+                  }}
+                  style={styles.confirmButton}
+                >
+                  <Text style={styles.confirmButtonText}>Confirmar</Text>
+                </Pressable>
+              </View>
+            ) : null}
 
-      <View style={styles.controlsRow}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Cancelar voz"
-          onPress={() => {
-            void voice.cancelListening();
-          }}
-          style={[styles.pauseButton, { borderColor: colors.border1, backgroundColor: isDark ? 'rgba(13,24,19,0.7)' : 'rgba(255,255,255,0.68)' }]}
-        >
-          <Feather name="pause" size={18} color={colors.text1} />
-        </Pressable>
+            {showUnsupported ? (
+              <View style={styles.unsupportedBox}>
+                <Text style={styles.unsupportedText}>{unsupportedCopy(voice.unsupportedIntent)}</Text>
+                {showOpenOrders ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Abrir pedidos"
+                    style={styles.ordersButton}
+                    onPress={() => {
+                      void voice.openOrdersFallback();
+                    }}
+                  >
+                    <Text style={styles.ordersButtonText}>Abrir pedidos</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
 
-        <VoiceSeedButton
-          status={voice.status}
-          disabled={disabled}
-          onPressIn={() => {
-            void voice.beginListening();
-          }}
-          onPressOut={() => {
-            void voice.stopListeningAndProcess();
-          }}
-          onPress={() => voice.setSheetVisible(true)}
-          backgroundColor={isDark ? 'rgba(111,168,138,0.22)' : 'rgba(40,179,130,0.19)'}
-          iconColor={isDark ? '#d6ece0' : '#135b42'}
-          borderColor={isDark ? 'rgba(111,168,138,0.4)' : 'rgba(40,179,130,0.36)'}
-        />
-      </View>
+            {showError ? (
+              <View style={styles.errorBox}>
+                <Text style={styles.errorText}>{voice.error}</Text>
+              </View>
+            ) : null}
 
-      <VoiceSheet
-        visible={voice.sheetVisible}
-        status={voice.status}
-        transcript={voice.transcript}
-        draftTranscript={voice.draftTranscript}
-        error={voice.error}
-        candidates={voice.candidates}
-        candidatesLoading={voice.candidatesLoading}
-        unsupportedIntent={voice.unsupportedIntent}
-        onClose={() => {
-          void voice.closeSheet();
-        }}
-        onRetry={() => {
-          void voice.beginListening();
-        }}
-        onConfirm={() => {
-          void voice.confirmDraftAndRun();
-        }}
-        onDraftChange={voice.setDraftTranscript}
-        onSelectCandidate={(candidate) => {
-          void voice.selectCandidateAndRun(candidate);
-        }}
-        onOpenOrders={() => {
-          void voice.openOrdersFallback();
-        }}
-        colors={colors}
-        isDark={isDark}
+            <VoiceDock
+            status={voice.status}
+            disabled={disabled}
+            onPause={() => {
+              void voice.cancelListening();
+            }}
+            onMicPressIn={() => {
+              void voice.beginListening();
+            }}
+            onMicPressOut={() => {
+              void voice.stopListeningAndProcess();
+            }}
+          />
+          </View>
+        }
       />
     </View>
   );
@@ -286,74 +345,125 @@ export function VoiceOrbScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    borderRadius: 22,
-    overflow: 'hidden',
+    justifyContent: 'center'
+  },
+  topLabel: {
+    textAlign: 'center',
+    color: 'rgba(43,43,43,0.7)',
+    fontSize: 15,
+    fontWeight: '500',
+    marginBottom: 14
+  },
+  bottomArea: {
+    width: '100%',
+    alignItems: 'center'
+  },
+  transcript: {
+    marginTop: 10,
+    color: '#1C1C1E',
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: '700',
+    textAlign: 'center',
+    maxWidth: '84%',
+    minHeight: 48
+  },
+  transcriptSpacer: {
+    height: 48
+  },
+  reviewPanel: {
+    marginTop: 12,
+    width: '100%',
+    gap: 10
+  },
+  reviewInput: {
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 18
+    borderColor: 'rgba(28,28,30,0.14)',
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.55)',
+    color: '#1C1C1E',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16
   },
-  bgLayer: {
-    position: 'absolute',
-    borderRadius: 999
+  candidatesRow: {
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'center'
   },
-  bgA: {
-    width: 390,
-    height: 390,
-    top: -120,
-    right: -120,
-    opacity: 0.9
-  },
-  bgB: {
-    width: 300,
-    height: 300,
-    left: -70,
-    top: 150
-  },
-  bgC: {
-    width: 220,
-    height: 220,
-    right: -20,
-    bottom: 30
-  },
-  topState: {
+  candidatePill: {
+    flex: 1,
+    minHeight: 36,
+    borderRadius: 18,
+    paddingHorizontal: 10,
     alignItems: 'center',
-    marginTop: 8
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.52)',
+    borderWidth: 1,
+    borderColor: 'rgba(28,28,30,0.12)'
   },
-  stateText: {
+  candidateText: {
+    color: '#1C1C1E',
+    fontSize: 13,
+    fontWeight: '500'
+  },
+  confirmButton: {
+    alignSelf: 'center',
+    minHeight: 38,
+    borderRadius: 19,
+    paddingHorizontal: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#2C3240'
+  },
+  confirmButtonText: {
+    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600'
   },
-  orbWrap: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  transcriptWrap: {
-    alignItems: 'center',
-    marginBottom: 10,
-    paddingHorizontal: 6
-  },
-  transcript: {
-    textAlign: 'center',
-    fontSize: 31,
-    lineHeight: 36,
-    fontWeight: '700'
-  },
-  controlsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 20,
-    marginBottom: 8
-  },
-  pauseButton: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+  unsupportedBox: {
+    marginTop: 10,
+    width: '100%',
+    borderRadius: 14,
     borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center'
+    borderColor: 'rgba(28,28,30,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.46)',
+    paddingHorizontal: 12,
+    paddingVertical: 10
+  },
+  unsupportedText: {
+    color: '#1C1C1E',
+    fontSize: 14,
+    lineHeight: 19,
+    textAlign: 'center'
+  },
+  ordersButton: {
+    marginTop: 8,
+    alignSelf: 'center',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(44,50,64,0.9)'
+  },
+  ordersButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600'
+  },
+  errorBox: {
+    marginTop: 10,
+    width: '100%',
+    borderRadius: 12,
+    backgroundColor: 'rgba(177,67,67,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(177,67,67,0.28)',
+    paddingHorizontal: 12,
+    paddingVertical: 8
+  },
+  errorText: {
+    color: '#7A1E1E',
+    textAlign: 'center',
+    fontSize: 13,
+    lineHeight: 18
   }
 });
