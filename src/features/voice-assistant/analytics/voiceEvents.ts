@@ -7,7 +7,9 @@ export type VoiceEventName =
   | 'voice_listen_started'
   | 'voice_listen_cancelled'
   | 'voice_processed'
-  | 'voice_failed';
+  | 'voice_failed'
+  | 'voice_intent_not_supported'
+  | 'voice_rhino_compared';
 
 export type VoiceEventPayload = {
   intentType?: string;
@@ -16,6 +18,8 @@ export type VoiceEventPayload = {
   confidenceBucket?: ConfidenceBucket;
   platform?: string;
   reason?: string;
+  rhinoUsed?: boolean;
+  rhinoSuccess?: boolean;
 };
 
 export type VoiceEventTracker = (name: VoiceEventName, payload?: VoiceEventPayload) => void;
@@ -29,6 +33,8 @@ export function buildSafeVoicePayload(payload: VoiceEventPayload): VoiceEventPay
     latencyMs: payload.latencyMs,
     confidenceBucket: payload.confidenceBucket,
     platform: payload.platform ?? Platform.OS,
-    reason: payload.reason
+    reason: payload.reason,
+    rhinoUsed: payload.rhinoUsed,
+    rhinoSuccess: payload.rhinoSuccess
   };
 }

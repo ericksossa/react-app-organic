@@ -1,8 +1,11 @@
 import React from 'react';
-import { parseIntent } from '../domain/parseIntent';
-import { ParsedIntent } from '../domain/intents';
+import { AppState } from 'react-native';
 import { buildSafeVoicePayload, noopVoiceTracker, VoiceEventTracker } from '../analytics/voiceEvents';
+import { scoreConfidence, VoiceScreenContext } from '../domain/confidence';
+import { ParsedIntent, VoiceCandidate, VoiceIntentType } from '../domain/intents';
+import { parseIntent } from '../domain/parseIntent';
 import { VoiceClient } from '../services/VoiceClient';
+import { disambiguationReducer, initialDisambiguationState } from './disambiguation';
 
 function triggerHaptic(kind: 'start' | 'stop' | 'error') {
   try {
@@ -18,6 +21,82 @@ function triggerHaptic(kind: 'start' | 'stop' | 'error') {
   } catch {
     // optional dependency
   }
+}
+
+function triggerEarcon(kind: 'start' | 'success' | 'error') {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const tts = require('react-native-tts');
+    const Tts = tts?.default ?? tts;
+    if (!Tts?.speak) return;
+
+    const text = kind === 'error' ? 'Ups' : kind === 'success' ? 'Listo' : 'Ok';
+    Tts.speak(text, {
+      iosVoiceId: undefined,
+      rate: 0.5,
+      androidParams: {
+        KEY_PARAM_STREAM: 'STREAM_NOTIFICATION'
+      }
+    });
+  } catch {
+    // optional dependency
+  }
+}
+
+function triggerFeedback(kind: 'start' | 'success' | 'error') {
+  if (kind === 'start') {
+    triggerHaptic('start');
+    triggerEarcon('start');
+    return;
+  }
+
+  if (kind === 'success') {
+    triggerHaptic('stop');
+    triggerEarcon('success');
+    return;
+  }
+
+  triggerHaptic('error');
+  triggerEarcon('error');
+}
+
+function mapRhinoIntent(intent?: string): VoiceIntentType | null {
+  const safe = (intent ?? '').toLowerCase();
+  if (!safe) return null;
+
+  if (safe.includes('add') || safe.includes('cart') || safe.includes('canasta')) return 'ADD_TO_CART';
+  if (safe.includes('track') || safe.includes('pedido') || safe.includes('order_status')) return 'TRACK_ORDER';
+  if (safe.includes('repeat') || safe.includes('reorder')) return 'REPEAT_LAST_ORDER';
+  if (safe.includes('search') || safe.includes('find') || safe.includes('catalog')) return 'SEARCH_PRODUCTS';
+  return null;
+}
+
+function fromRhinoSlot(slots: Record<string, string>, names: string[]): string | undefined {
+  for (const key of names) {
+    const value = slots[key];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+function applyRhinoHint(parsed: ParsedIntent, rhinoHint: { used: boolean; success: boolean; intent?: string; slots?: Record<string, string> }) {
+  if (!rhinoHint.used || !rhinoHint.success) return parsed;
+
+  const mappedType = mapRhinoIntent(rhinoHint.intent);
+  const slots = rhinoHint.slots ?? {};
+  const slotProduct = fromRhinoSlot(slots, ['product', 'item', 'query']);
+  const slotQtyRaw = fromRhinoSlot(slots, ['quantity', 'qty', 'amount']);
+  const slotQty = slotQtyRaw ? Number(slotQtyRaw.replace(',', '.')) : undefined;
+
+  return {
+    ...parsed,
+    type: mappedType ?? parsed.type,
+    entities: {
+      ...parsed.entities,
+      productQuery: slotProduct ?? parsed.entities.productQuery,
+      quantity: Number.isFinite(slotQty) ? slotQty : parsed.entities.quantity
+    }
+  };
 }
 
 export type VoiceAssistantStatus =
@@ -40,6 +119,7 @@ export type VoiceAssistantActions = {
   onAddToCart: (params: { query: string; qty: number }) => Promise<void> | void;
   onRepeatLastOrder?: () => Promise<void> | void;
   onTrackOrder?: () => Promise<void> | void;
+  onOpenOrders?: () => Promise<void> | void;
 };
 
 export type UseVoiceAssistantArgs = {
@@ -47,23 +127,34 @@ export type UseVoiceAssistantArgs = {
   actions: VoiceAssistantActions;
   timeoutMs?: number;
   tracker?: VoiceEventTracker;
+  screenContext?: VoiceScreenContext;
+  rhinoFirst?: boolean;
+  resolveCandidates?: (params: { query: string; intentType: VoiceIntentType }) => Promise<VoiceCandidate[]>;
 };
 
 export function useVoiceAssistant({
   client,
   actions,
   timeoutMs = 10_000,
-  tracker = noopVoiceTracker
+  tracker = noopVoiceTracker,
+  screenContext = 'voice',
+  rhinoFirst = false,
+  resolveCandidates
 }: UseVoiceAssistantArgs) {
   const [status, setStatus] = React.useState<VoiceAssistantStatus>('idle');
   const [transcript, setTranscript] = React.useState('');
-  const [draftTranscript, setDraftTranscript] = React.useState('');
   const [error, setError] = React.useState<string | null>(null);
   const [parsedIntent, setParsedIntent] = React.useState<ParsedIntent | null>(null);
   const [sheetVisible, setSheetVisible] = React.useState(false);
+  const [unsupportedIntent, setUnsupportedIntent] = React.useState<VoiceIntentType | null>(null);
+  const [disambiguation, dispatchDisambiguation] = React.useReducer(
+    disambiguationReducer,
+    initialDisambiguationState
+  );
 
   const startTsRef = React.useRef<number>(0);
   const timeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flowIdRef = React.useRef(0);
 
   const clearTimeoutRef = React.useCallback(() => {
     if (!timeoutRef.current) return;
@@ -71,46 +162,81 @@ export function useVoiceAssistant({
     timeoutRef.current = null;
   }, []);
 
+  const newFlowId = React.useCallback(() => {
+    flowIdRef.current += 1;
+    return flowIdRef.current;
+  }, []);
+
+  const isFlowActive = React.useCallback((flowId: number) => flowId === flowIdRef.current, []);
+
+  const resolveTopCandidates = React.useCallback(
+    async (intent: ParsedIntent): Promise<VoiceCandidate[]> => {
+      const raw = intent.entities.productQuery ?? '';
+      const query = raw.trim();
+      const isProductIntent = intent.type === 'SEARCH_PRODUCTS' || intent.type === 'ADD_TO_CART';
+      if (!resolveCandidates || !isProductIntent || !query) return [];
+
+      try {
+        const candidates = await resolveCandidates({ query, intentType: intent.type });
+        return candidates.slice(0, 3);
+      } catch {
+        return [];
+      }
+    },
+    [resolveCandidates]
+  );
+
   const executeIntent = React.useCallback(
-    async (intent: ParsedIntent, rawText: string) => {
+    async (intent: ParsedIntent, rawText: string, candidate?: VoiceCandidate): Promise<'ok' | 'unsupported'> => {
+      const candidateQuery = candidate?.name?.trim() || candidate?.slug?.trim();
+      const resolvedQuery = candidateQuery || intent.entities.productQuery || rawText;
+
       switch (intent.type) {
         case 'ADD_TO_CART':
           await actions.onAddToCart({
-            query: intent.entities.productQuery || rawText,
+            query: resolvedQuery,
             qty: Math.max(1, intent.entities.quantity ?? 1)
           });
-          return;
+          return 'ok';
         case 'REPEAT_LAST_ORDER':
-          await actions.onRepeatLastOrder?.();
-          return;
+          if (!actions.onRepeatLastOrder) return 'unsupported';
+          await actions.onRepeatLastOrder();
+          return 'ok';
         case 'TRACK_ORDER':
-          await actions.onTrackOrder?.();
-          return;
+          if (!actions.onTrackOrder) return 'unsupported';
+          await actions.onTrackOrder();
+          return 'ok';
         case 'SEARCH_PRODUCTS':
         default:
           await actions.onSearchProducts({
-            query: intent.entities.productQuery || rawText,
+            query: resolvedQuery,
             attributes: intent.entities.attributes,
             sort: intent.entities.sort,
             delivery: intent.entities.delivery
           });
+          return 'ok';
       }
     },
     [actions]
   );
 
   const beginListening = React.useCallback(async () => {
+    const flowId = newFlowId();
     setSheetVisible(true);
     setError(null);
     setTranscript('');
-    setDraftTranscript('');
     setParsedIntent(null);
+    setUnsupportedIntent(null);
+    dispatchDisambiguation({ type: 'RESET' });
 
     tracker('voice_permission_prompted', buildSafeVoicePayload({}));
 
     const started = await client.startListening((partial) => {
+      if (!isFlowActive(flowId)) return;
       setTranscript(partial);
     });
+
+    if (!isFlowActive(flowId)) return;
 
     if (started.ok === false) {
       if (started.reason === 'permission_denied') {
@@ -126,95 +252,203 @@ export function useVoiceAssistant({
 
     startTsRef.current = Date.now();
     setStatus('listening');
-    triggerHaptic('start');
+    triggerFeedback('start');
     tracker('voice_listen_started', buildSafeVoicePayload({}));
 
     clearTimeoutRef();
     timeoutRef.current = setTimeout(() => {
       void cancelListening('timeout');
     }, timeoutMs);
-  }, [clearTimeoutRef, client, timeoutMs, tracker]);
+  }, [clearTimeoutRef, client, isFlowActive, newFlowId, timeoutMs, tracker]);
+
+  const setReviewState = React.useCallback((intent: ParsedIntent, draft: string, candidates: VoiceCandidate[]) => {
+    setParsedIntent(intent);
+    dispatchDisambiguation({ type: 'SET_DRAFT', draft });
+    dispatchDisambiguation({ type: 'RESOLVE_DONE', candidates });
+    setStatus('review');
+  }, []);
 
   const stopListeningAndProcess = React.useCallback(async () => {
     if (!client.isListening()) return;
 
+    const flowId = flowIdRef.current;
     clearTimeoutRef();
     setStatus('processing');
+    setError(null);
 
     try {
-      const result = await client.stopListening();
+      const result = await client.stopListening({ rhinoFirst });
+      if (!isFlowActive(flowId)) return;
+
       const finalTranscript = (result.transcript || transcript).trim();
-      const parsed = parseIntent(finalTranscript);
+      const parsed = applyRhinoHint(parseIntent(finalTranscript), result.rhinoHint);
       const latencyMs = Date.now() - startTsRef.current;
+      const confidenceBreakdown = scoreConfidence(parsed, screenContext);
 
       setTranscript(finalTranscript);
-      setDraftTranscript(finalTranscript);
       setParsedIntent(parsed);
+      setUnsupportedIntent(null);
 
-      if (parsed.requiresConfirmation) {
-        setStatus('review');
+      tracker(
+        'voice_rhino_compared',
+        buildSafeVoicePayload({
+          rhinoUsed: result.rhinoHint.used,
+          rhinoSuccess: result.rhinoHint.success,
+          success: result.rhinoHint.success
+        })
+      );
+
+      const candidates = await resolveTopCandidates(parsed);
+      if (!isFlowActive(flowId)) return;
+
+      const ambiguousByCandidates = candidates.length > 1;
+      const needsReview = parsed.requiresConfirmation || confidenceBreakdown.bucket !== 'high' || ambiguousByCandidates;
+
+      if (needsReview) {
+        setReviewState(parsed, finalTranscript, candidates);
         tracker(
           'voice_processed',
           buildSafeVoicePayload({
             intentType: parsed.type,
             success: true,
             latencyMs,
-            confidenceBucket: parsed.confidence
+            confidenceBucket: confidenceBreakdown.bucket,
+            rhinoUsed: result.rhinoHint.used,
+            rhinoSuccess: result.rhinoHint.success
           })
         );
         return;
       }
 
-      await executeIntent(parsed, finalTranscript);
+      const execution = await executeIntent(parsed, finalTranscript, candidates[0]);
+      if (!isFlowActive(flowId)) return;
+
+      if (execution === 'unsupported') {
+        setUnsupportedIntent(parsed.type);
+        setStatus('review');
+        tracker(
+          'voice_intent_not_supported',
+          buildSafeVoicePayload({ intentType: parsed.type, success: false, confidenceBucket: confidenceBreakdown.bucket })
+        );
+        return;
+      }
+
       setStatus('success');
-      triggerHaptic('stop');
+      triggerFeedback('success');
       tracker(
         'voice_processed',
         buildSafeVoicePayload({
           intentType: parsed.type,
           success: true,
           latencyMs,
-          confidenceBucket: parsed.confidence
+          confidenceBucket: confidenceBreakdown.bucket,
+          rhinoUsed: result.rhinoHint.used,
+          rhinoSuccess: result.rhinoHint.success
         })
       );
     } catch {
+      if (!isFlowActive(flowId)) return;
       setStatus('error');
-      triggerHaptic('error');
+      triggerFeedback('error');
       setError('No entendimos el audio. Puedes intentar de nuevo o escribir tu búsqueda.');
       tracker('voice_failed', buildSafeVoicePayload({ success: false, reason: 'stt_error' }));
     }
-  }, [clearTimeoutRef, client, executeIntent, tracker, transcript]);
+  }, [
+    clearTimeoutRef,
+    client,
+    executeIntent,
+    isFlowActive,
+    resolveTopCandidates,
+    rhinoFirst,
+    screenContext,
+    setReviewState,
+    tracker,
+    transcript
+  ]);
 
   const confirmDraftAndRun = React.useCallback(async () => {
-    const finalText = draftTranscript.trim();
+    const finalText = disambiguation.draft.trim();
     const parsed = parseIntent(finalText);
+    const confidence = scoreConfidence(parsed, screenContext);
 
     setStatus('processing');
     setParsedIntent(parsed);
+    setUnsupportedIntent(null);
 
     try {
-      await executeIntent(parsed, finalText);
+      const candidates = await resolveTopCandidates(parsed);
+      const ambiguousByCandidates = candidates.length > 1;
+
+      if (parsed.requiresConfirmation || confidence.bucket !== 'high' || ambiguousByCandidates) {
+        setReviewState(parsed, finalText, candidates);
+        return;
+      }
+
+      const execution = await executeIntent(parsed, finalText, candidates[0]);
+      if (execution === 'unsupported') {
+        setUnsupportedIntent(parsed.type);
+        setStatus('review');
+        tracker(
+          'voice_intent_not_supported',
+          buildSafeVoicePayload({ intentType: parsed.type, success: false, confidenceBucket: confidence.bucket })
+        );
+        return;
+      }
+
       setTranscript(finalText);
       setStatus('success');
-      triggerHaptic('stop');
+      triggerFeedback('success');
     } catch {
       setStatus('error');
-      triggerHaptic('error');
+      triggerFeedback('error');
       setError('No pudimos ejecutar la acción por voz en este momento.');
     }
-  }, [draftTranscript, executeIntent]);
+  }, [disambiguation.draft, executeIntent, resolveTopCandidates, screenContext, setReviewState, tracker]);
+
+  const selectCandidateAndRun = React.useCallback(
+    async (candidate: VoiceCandidate) => {
+      if (!parsedIntent) return;
+      const sourceText = disambiguation.draft || transcript;
+      setStatus('processing');
+      setUnsupportedIntent(null);
+
+      try {
+        const execution = await executeIntent(parsedIntent, sourceText, candidate);
+        if (execution === 'unsupported') {
+          setUnsupportedIntent(parsedIntent.type);
+          setStatus('review');
+          tracker(
+            'voice_intent_not_supported',
+            buildSafeVoicePayload({ intentType: parsedIntent.type, success: false, confidenceBucket: 'med' })
+          );
+          return;
+        }
+
+        setTranscript(sourceText);
+        setStatus('success');
+        triggerFeedback('success');
+      } catch {
+        setStatus('error');
+        setError('No pudimos ejecutar la acción por voz en este momento.');
+        triggerFeedback('error');
+      }
+    },
+    [disambiguation.draft, executeIntent, parsedIntent, tracker, transcript]
+  );
 
   const cancelListening = React.useCallback(
     async (reason: 'user_cancel' | 'timeout' = 'user_cancel') => {
+      newFlowId();
       clearTimeoutRef();
       await client.cancel();
       setStatus('idle');
       tracker('voice_listen_cancelled', buildSafeVoicePayload({ reason }));
     },
-    [clearTimeoutRef, client, tracker]
+    [clearTimeoutRef, client, newFlowId, tracker]
   );
 
   const closeSheet = React.useCallback(async () => {
+    newFlowId();
     clearTimeoutRef();
     if (client.isListening()) {
       await client.cancel();
@@ -222,7 +456,49 @@ export function useVoiceAssistant({
     setSheetVisible(false);
     setStatus('idle');
     setError(null);
-  }, [clearTimeoutRef, client]);
+    setUnsupportedIntent(null);
+    setParsedIntent(null);
+    dispatchDisambiguation({ type: 'RESET' });
+  }, [clearTimeoutRef, client, newFlowId]);
+
+  const openOrdersFallback = React.useCallback(async () => {
+    await actions.onOpenOrders?.();
+  }, [actions]);
+
+  React.useEffect(() => {
+    if (status !== 'review') return;
+
+    const draft = disambiguation.draft.trim();
+    if (!draft) {
+      dispatchDisambiguation({ type: 'RESOLVE_DONE', candidates: [] });
+      return;
+    }
+
+    dispatchDisambiguation({ type: 'RESOLVE_START' });
+
+    const timer = setTimeout(() => {
+      void (async () => {
+        const nextParsed = parseIntent(draft);
+        setParsedIntent(nextParsed);
+        const candidates = await resolveTopCandidates(nextParsed);
+        dispatchDisambiguation({ type: 'RESOLVE_DONE', candidates });
+      })();
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [disambiguation.draft, resolveTopCandidates, status]);
+
+  React.useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') {
+        void cancelListening('user_cancel');
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [cancelListening]);
 
   React.useEffect(() => {
     return () => {
@@ -234,16 +510,24 @@ export function useVoiceAssistant({
   return {
     status,
     transcript,
-    draftTranscript,
+    draftTranscript: disambiguation.draft,
     parsedIntent,
+    candidates: disambiguation.candidates,
+    candidatesLoading: disambiguation.loading,
+    unsupportedIntent,
     error,
     sheetVisible,
     setSheetVisible,
-    setDraftTranscript,
+    setDraftTranscript: (value: string) => {
+      dispatchDisambiguation({ type: 'SET_DRAFT', draft: value });
+      setUnsupportedIntent(null);
+    },
     beginListening,
     stopListeningAndProcess,
     confirmDraftAndRun,
+    selectCandidateAndRun,
     cancelListening,
-    closeSheet
+    closeSheet,
+    openOrdersFallback
   };
 }

@@ -1,51 +1,11 @@
 import { ParsedEntities, ParsedIntent, VoiceIntentType } from './intents';
-
-const WORD_NUMBERS: Record<string, number> = {
-  un: 1,
-  uno: 1,
-  una: 1,
-  dos: 2,
-  tres: 3,
-  cuatro: 4,
-  cinco: 5,
-  seis: 6,
-  siete: 7,
-  ocho: 8,
-  nueve: 9,
-  diez: 10
-};
+import { normalizeText, parseQuantityAndUnit } from './normalization';
 
 const ADD_TO_CART_PATTERN = /(agrega|agregame|añade|anade|pon|suma).*(canasta|carrito|cesta)?/;
 const REPEAT_ORDER_PATTERN = /(repite|repetir).*(ultima|última).*(compra|orden|pedido)/;
 const TRACK_ORDER_PATTERN = /(donde|dónde).*(pedido|orden)|estado.*(pedido|orden)|rastrea.*(pedido|orden)/;
 const SEARCH_PATTERN = /(busca|buscar|muestrame|muéstrame|quiero|necesito|traeme|tráeme|encuentra)/;
 const LOW_CONFIDENCE_TERMS = /(algo|cosas|productos|mercado|comida)/;
-
-function normalize(value: string): string {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim();
-}
-
-function extractQuantity(normalized: string): number | undefined {
-  const numeric = normalized.match(/\b(\d{1,3})(?:[\.,](\d+))?\b/);
-  if (numeric?.[1]) return Number(numeric[1]);
-
-  const token = normalized.split(/\s+/).find((part) => WORD_NUMBERS[part] !== undefined);
-  if (token) return WORD_NUMBERS[token];
-
-  return undefined;
-}
-
-function extractUnit(normalized: string): ParsedEntities['unit'] {
-  if (/\b(kilo|kilos|kg)\b/.test(normalized)) return 'kg';
-  if (/\b(gr|gramo|gramos|g)\b/.test(normalized)) return 'g';
-  if (/\b(lb|libra|libras)\b/.test(normalized)) return 'lb';
-  if (/\b(unidad|unidades|u)\b/.test(normalized)) return 'unidad';
-  return undefined;
-}
 
 function extractAttributes(normalized: string): ParsedEntities['attributes'] {
   const attrs: ParsedEntities['attributes'] = [];
@@ -97,12 +57,27 @@ function extractProductQuery(original: string, normalized: string, type: VoiceIn
     'canasta',
     'carrito',
     'cesta',
-    'pedido'
+    'pedido',
+    'kilo',
+    'kilos',
+    'kg',
+    'gramo',
+    'gramos',
+    'g',
+    'libra',
+    'libras',
+    'lb',
+    'unidad',
+    'unidades',
+    'manojo',
+    'manojos',
+    'media',
+    'docena'
   ];
 
   const parts = normalized
     .split(/\s+/)
-    .filter((token) => token.length > 1 && !stopWords.includes(token) && !/^\d+$/.test(token));
+    .filter((token) => token.length > 1 && !stopWords.includes(token) && !/^[\d.,]+$/.test(token));
 
   const parsed = parts.join(' ').trim();
   return parsed || original.trim();
@@ -126,15 +101,15 @@ function confidenceFor(normalized: string, productQuery: string, intent: VoiceIn
 
 export function parseIntent(transcript: string): ParsedIntent {
   const safeTranscript = transcript.trim();
-  const normalized = normalize(safeTranscript);
+  const normalized = normalizeText(safeTranscript);
   const type = detectIntent(normalized);
 
   const productQuery = extractProductQuery(safeTranscript, normalized, type);
-  const quantity = extractQuantity(normalized);
+  const qtyUnit = parseQuantityAndUnit(normalized);
   const entities: ParsedEntities = {
     productQuery,
-    quantity,
-    unit: extractUnit(normalized),
+    quantity: qtyUnit.quantity,
+    unit: qtyUnit.unit,
     attributes: extractAttributes(normalized),
     sort: extractSort(normalized),
     delivery: extractDelivery(normalized)

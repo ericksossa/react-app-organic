@@ -9,10 +9,16 @@ export type ConfidenceBucket = 'low' | 'med' | 'high';
 export type ParsedEntities = {
   productQuery?: string;
   quantity?: number;
-  unit?: 'kg' | 'g' | 'lb' | 'unidad';
+  unit?: 'kg' | 'g' | 'lb' | 'unidad' | 'manojo';
   attributes: Array<'organico' | 'sin_quimicos'>;
   sort?: 'price_asc' | 'rating_desc';
   delivery?: 'hoy' | 'manana';
+};
+
+export type VoiceCandidate = {
+  id: string;
+  name: string;
+  slug?: string;
 };
 
 export type ParsedIntent = {
