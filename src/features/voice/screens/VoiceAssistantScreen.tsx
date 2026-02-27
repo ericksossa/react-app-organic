@@ -5,6 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { VoiceAssistantDock } from '../../voice-assistant/ui/VoiceAssistantDock';
+import { VoiceOrbScreen } from '../../voice-assistant/ui/VoiceOrbScreen';
 import { useTheme } from '../../../shared/theme/useTheme';
 
 function envValue(key: string): string {
@@ -32,6 +33,9 @@ export function VoiceAssistantScreen() {
   const porcupineModelPath =
     envValue('EXPO_PUBLIC_PICOVOICE_PORCUPINE_MODEL_PATH') || bundledAssets.porcupineModelPath || '';
   const rhinoModelPath = envValue('EXPO_PUBLIC_PICOVOICE_RHINO_MODEL_PATH');
+  const voiceOrbUiEnabled =
+    envValue('VOICE_ORB_UI').toLowerCase() === 'true' ||
+    envValue('EXPO_PUBLIC_VOICE_ORB_UI').toLowerCase() === 'true';
 
   const hasConfig = Boolean(accessKey && cheetahModelPath && rhinoContextPath);
 
@@ -155,28 +159,52 @@ export function VoiceAssistantScreen() {
         </View>
 
         <View style={styles.stage}>
-          <VoiceAssistantDock
-            accessKey={accessKey}
-            cheetahModelPath={cheetahModelPath}
-            rhinoContextPath={rhinoContextPath}
-            rhinoModelPath={rhinoModelPath || undefined}
-            enabled={assetsReady}
-            onOpenCatalog={({ query, categorySlug }) => {
-              (navigation.getParent() as any)?.navigate?.('CatalogTab', {
-                screen: 'CatalogMain',
-                params: {
-                  initialQuery: query,
-                  initialCategorySlug: categorySlug
-                }
-              });
-            }}
-            onOpenOrders={() => {
-              (navigation.getParent() as any)?.navigate?.('HomeTab', {
-                screen: 'OrdersMain'
-              });
-            }}
-            style={styles.assistantDock}
-          />
+          {voiceOrbUiEnabled ? (
+            <VoiceOrbScreen
+              accessKey={accessKey}
+              cheetahModelPath={cheetahModelPath}
+              rhinoContextPath={rhinoContextPath}
+              rhinoModelPath={rhinoModelPath || undefined}
+              enabled={assetsReady}
+              onOpenCatalog={({ query, categorySlug }) => {
+                (navigation.getParent() as any)?.navigate?.('CatalogTab', {
+                  screen: 'CatalogMain',
+                  params: {
+                    initialQuery: query,
+                    initialCategorySlug: categorySlug
+                  }
+                });
+              }}
+              onOpenOrders={() => {
+                (navigation.getParent() as any)?.navigate?.('HomeTab', {
+                  screen: 'OrdersMain'
+                });
+              }}
+            />
+          ) : (
+            <VoiceAssistantDock
+              accessKey={accessKey}
+              cheetahModelPath={cheetahModelPath}
+              rhinoContextPath={rhinoContextPath}
+              rhinoModelPath={rhinoModelPath || undefined}
+              enabled={assetsReady}
+              onOpenCatalog={({ query, categorySlug }) => {
+                (navigation.getParent() as any)?.navigate?.('CatalogTab', {
+                  screen: 'CatalogMain',
+                  params: {
+                    initialQuery: query,
+                    initialCategorySlug: categorySlug
+                  }
+                });
+              }}
+              onOpenOrders={() => {
+                (navigation.getParent() as any)?.navigate?.('HomeTab', {
+                  screen: 'OrdersMain'
+                });
+              }}
+              style={styles.assistantDock}
+            />
+          )}
           <View style={styles.placeholderSpace} />
         </View>
       </View>
