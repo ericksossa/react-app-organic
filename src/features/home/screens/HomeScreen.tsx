@@ -523,6 +523,39 @@ export function HomeScreen({ navigation }: Props) {
           </View>
         ) : null}
 
+        <Reveal delayMs={20}>
+          <Pressable
+            onPress={() => navigation.getParent()?.navigate('VoiceTab' as never)}
+            style={[
+              styles.voiceShortcutCard,
+              {
+                borderColor: isLight ? 'rgba(40,179,130,0.30)' : 'rgba(111,168,138,0.26)',
+                backgroundColor: isLight ? 'rgba(232,248,241,0.92)' : 'rgba(14,24,20,0.96)'
+              }
+            ]}
+          >
+            <View
+              style={[
+                styles.voiceShortcutIcon,
+                {
+                  backgroundColor: isLight ? 'rgba(40,179,130,0.13)' : 'rgba(111,168,138,0.14)'
+                }
+              ]}
+            >
+              <Feather name="mic" size={16} color={isLight ? '#1e7253' : '#cfe4d8'} />
+            </View>
+            <View style={styles.voiceShortcutCopy}>
+              <AppText style={[styles.voiceShortcutTitle, { color: colors.text1 }]}>
+                Asistente por voz premium
+              </AppText>
+              <AppText style={[styles.voiceShortcutBody, { color: colors.text2 }]}>
+                Busca y agrega orgánicos diciendo “Hey GreenCart”.
+              </AppText>
+            </View>
+            <Feather name="chevron-right" size={16} color={colors.text2} />
+          </Pressable>
+        </Reveal>
+
         <Animated.View style={heroScrollStyle}>
           <ImageBackground source={toCachedImageSource(HERO_IMAGE)} style={styles.hero} imageStyle={styles.heroImage}>
             <View style={styles.heroOverlay} />
@@ -873,6 +906,36 @@ const styles = StyleSheet.create({
     height: 4.1,
     backgroundColor: '#f1f4f2',
     transform: [{ rotate: '45deg' }]
+  },
+  voiceShortcutCard: {
+    marginTop: 4,
+    marginBottom: 2,
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10
+  },
+  voiceShortcutIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  voiceShortcutCopy: {
+    flex: 1
+  },
+  voiceShortcutTitle: {
+    fontSize: 13,
+    fontWeight: '700'
+  },
+  voiceShortcutBody: {
+    marginTop: 1,
+    fontSize: 11,
+    lineHeight: 14
   },
   hero: {
     minHeight: 520,

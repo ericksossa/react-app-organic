@@ -29,9 +29,14 @@ export type CartStackParamList = {
   Checkout: undefined;
 };
 
+export type VoiceStackParamList = {
+  VoiceMain: undefined;
+};
+
 export type AppTabsParamList = {
   HomeTab: undefined;
   CatalogTab: undefined;
+  VoiceTab: undefined;
   CartTab: undefined;
 };
 

@@ -11,7 +11,7 @@ import { AppText } from '../../shared/ui/AppText';
 import { motionDuration, motionEasings } from '../../design/motion/tokens';
 import { useReducedMotionSetting } from '../../design/motion/useReducedMotionSetting';
 
-type IconName = 'home' | 'explore' | 'cart';
+type IconName = 'home' | 'explore' | 'voice' | 'cart';
 
 type Props = {
   focused: boolean;
@@ -98,6 +98,10 @@ function TabGlyph({
 
   if (icon === 'explore') {
     return <Feather name="search" color={color} size={size} />;
+  }
+
+  if (icon === 'voice') {
+    return <Feather name={focused ? 'mic' : 'mic-off'} color={color} size={size} />;
   }
 
   return (

@@ -9,6 +9,7 @@ import { AppTabsParamList } from './types';
 import { HomeStackNavigator } from './HomeStackNavigator';
 import { CatalogStackNavigator } from './CatalogStackNavigator';
 import { CartStackNavigator } from './CartStackNavigator';
+import { VoiceStackNavigator } from './VoiceStackNavigator';
 import { useTheme } from '../../shared/theme/useTheme';
 import { AnimatedTabIcon } from './AnimatedTabIcon';
 import { withTabSceneTransition } from './withTabSceneTransition';
@@ -18,6 +19,7 @@ const Tab = createBottomTabNavigator<AppTabsParamList>();
 const TAB_BAR_BASE_HEIGHT = 68;
 const HomeScene = withTabSceneTransition(HomeStackNavigator);
 const CatalogScene = withTabSceneTransition(CatalogStackNavigator);
+const VoiceScene = withTabSceneTransition(VoiceStackNavigator);
 const CartScene = withTabSceneTransition(CartStackNavigator);
 
 export function MainTabs() {
@@ -80,6 +82,21 @@ export function MainTabs() {
               focused={focused}
               label="Cosecha"
               icon="explore"
+              activeColor={activeTone}
+              inactiveColor={inactiveTone}
+            />
+          )
+        }}
+      />
+      <Tab.Screen
+        name="VoiceTab"
+        component={VoiceScene}
+        options={{
+          tabBarIcon: ({ focused }) => (
+            <AnimatedTabIcon
+              focused={focused}
+              label="Voz"
+              icon="voice"
               activeColor={activeTone}
               inactiveColor={inactiveTone}
             />

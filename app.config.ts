@@ -8,7 +8,11 @@ const config: ExpoConfig = {
   orientation: 'portrait',
   ios: {
     bundleIdentifier: 'io.organicapp.mobile',
-    supportsTablet: true
+    supportsTablet: true,
+    deploymentTarget: '16.0',
+    infoPlist: {
+      NSMicrophoneUsageDescription: 'GreenCart usa el micrófono para búsqueda y asistente de voz on-device.'
+    }
   },
   android: {
     package: 'io.organicapp.mobile'

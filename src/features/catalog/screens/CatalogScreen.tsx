@@ -15,7 +15,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
+import { useIsFocused } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { Feather } from '@expo/vector-icons';
+import { Asset } from 'expo-asset';
 import { CatalogStackParamList } from '../../../app/navigation/types';
 import { CatalogProduct, getCatalog, getCategories, getProductBySlug } from '../../../services/api/catalogApi';
 import { AppCard } from '../../../shared/ui/AppCard';
@@ -47,6 +50,14 @@ import Animated, {
 import { useReducedMotionSetting } from '../../../design/motion/useReducedMotionSetting';
 import { motionDuration, motionEasings } from '../../../design/motion/tokens';
 import { Reveal } from '../../../design/motion/Reveal';
+import { VoiceSeedButton } from '../../voice-assistant/ui/VoiceSeedButton';
+import { VoiceSheet } from '../../voice-assistant/ui/VoiceSheet';
+import { useVoiceAssistant } from '../../voice-assistant/state/useVoiceAssistant';
+import { VoiceClient } from '../../voice-assistant/services/VoiceClient';
+import { PicovoiceSttProvider } from '../../voice-assistant/services/stt/PicovoiceSttProvider';
+import { NoopTtsService } from '../../voice-assistant/services/tts/TtsService';
+import { buildSafeVoicePayload } from '../../voice-assistant/analytics/voiceEvents';
+import { VoiceCandidate, VoiceIntentType } from '../../voice-assistant/domain/intents';
 
 type Props = NativeStackScreenProps<CatalogStackParamList, 'CatalogMain'>;
 const ZONE_SHEET_ANIM_MS = 280;
@@ -113,6 +124,10 @@ function normalizeSearchText(value: string): string {
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .trim();
+}
+
+function envValue(key: string): string {
+  return (process.env[key] ?? '').trim();
 }
 
 const CatalogRow = React.memo(function CatalogRow({
@@ -307,6 +322,7 @@ const CatalogRow = React.memo(function CatalogRow({
 
 export function CatalogScreen({ navigation, route }: Props) {
   const { colors: themeColors, isDark } = useTheme();
+  const isFocused = useIsFocused();
   const reduceMotion = useReducedMotionSetting();
   const zoneId = useAvailabilityStore((s) => s.selectedZoneId);
   const selectedZone = useAvailabilityStore((s) => s.selectedZone);
@@ -318,7 +334,15 @@ export function CatalogScreen({ navigation, route }: Props) {
   const [zonePickerOpen, setZonePickerOpen] = React.useState(false);
   const [addingProductId, setAddingProductId] = React.useState<string | null>(null);
   const [addError, setAddError] = React.useState<string | null>(null);
+  const [voiceInfo, setVoiceInfo] = React.useState<string | null>(null);
   const [highlightedProductId, setHighlightedProductId] = React.useState<string | null>(null);
+  const [voiceAssets, setVoiceAssets] = React.useState<{
+    cheetahModelPath?: string;
+    rhinoContextPath?: string;
+    rhinoModelPath?: string;
+  }>({});
+  const [voiceAssetsReady, setVoiceAssetsReady] = React.useState(false);
+  const wasFocusedRef = React.useRef(isFocused);
   const zoneSheetProgress = useSharedValue(0);
   const searchFocusProgress = useSharedValue(0);
   const catalogScrollY = useSharedValue(0);
@@ -353,6 +377,36 @@ export function CatalogScreen({ navigation, route }: Props) {
     }
   }, [zones, zoneId, selectZone]);
 
+  React.useEffect(() => {
+    let mounted = true;
+
+    const loadVoiceAssets = async () => {
+      try {
+        const cheetahAsset = Asset.fromModule(require('../../../../assets/cheetah_params_es.pv'));
+        const rhinoContextAsset = Asset.fromModule(require('../../../../assets/coffee_maker_ios.rhn'));
+
+        await Promise.all([cheetahAsset.downloadAsync(), rhinoContextAsset.downloadAsync()]);
+        if (!mounted) return;
+
+        setVoiceAssets({
+          cheetahModelPath: cheetahAsset.localUri ?? cheetahAsset.uri,
+          rhinoContextPath: rhinoContextAsset.localUri ?? rhinoContextAsset.uri,
+          rhinoModelPath: undefined
+        });
+      } catch {
+        if (!mounted) return;
+        setVoiceAssets({});
+      } finally {
+        if (mounted) setVoiceAssetsReady(true);
+      }
+    };
+
+    void loadVoiceAssets();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const categoriesQuery = useQuery({
     queryKey: ['catalog-categories'],
     queryFn: getCategories
@@ -378,6 +432,190 @@ export function CatalogScreen({ navigation, route }: Props) {
   const routeInitialCategorySlug = route.params?.initialCategorySlug;
   const routeInitialProductSlug = route.params?.initialProductSlug;
   const lastAppliedRouteSeedRef = React.useRef('');
+  const voiceAccessKey =
+    envValue('EXPO_PUBLIC_PICOVOICE_ACCESS_KEY') || 'ULsNVp4KnQD54mcBQxlUQqnvqgleLLc9n/h+d5r2zOOKE86zaru8sw==';
+  const voiceCheetahModelPath =
+    envValue('EXPO_PUBLIC_PICOVOICE_CHEETAH_MODEL_PATH') || voiceAssets.cheetahModelPath || '';
+  const voiceRhinoContextPath =
+    envValue('EXPO_PUBLIC_PICOVOICE_RHINO_CONTEXT_PATH_ES_CO') || voiceAssets.rhinoContextPath || '';
+  const voiceRhinoModelPath = envValue('EXPO_PUBLIC_PICOVOICE_RHINO_MODEL_PATH') || voiceAssets.rhinoModelPath;
+  const voiceEnabled = voiceAssetsReady && Boolean(voiceAccessKey && voiceCheetahModelPath && voiceRhinoContextPath);
+
+  const voiceClient = React.useMemo(() => {
+    if (!voiceEnabled) return null;
+
+    const stt = new PicovoiceSttProvider({
+      accessKey: voiceAccessKey,
+      cheetahModelPath: voiceCheetahModelPath,
+      rhinoContextPath: voiceRhinoContextPath,
+      rhinoModelPath: voiceRhinoModelPath || undefined,
+      endpointDurationSec: 1.1,
+      organicTerms: ['aguacate hass', 'tomate orgánico', 'lechuga', 'finca', 'sin químicos']
+    });
+
+    return new VoiceClient(stt, new NoopTtsService(), {
+      hasRecordAudioPermission: () => stt.hasPermission()
+    });
+  }, [voiceAccessKey, voiceCheetahModelPath, voiceEnabled, voiceRhinoContextPath, voiceRhinoModelPath]);
+
+  const inactiveVoiceClient = React.useMemo(
+    () =>
+      new VoiceClient(
+        {
+          start: async () => undefined,
+          stop: async () => ({ transcript: '' }),
+          cancel: async () => undefined,
+          isListening: () => false,
+          dispose: async () => undefined
+        },
+        new NoopTtsService()
+      ),
+    []
+  );
+
+  const resolveProductForVoice = React.useCallback(
+    async (queryText: string): Promise<CatalogProduct | null> => {
+      const normalizedQuery = normalizeSearchText(queryText);
+      if (!normalizedQuery) return null;
+
+      const localMatch =
+        products.find((item) => normalizeSearchText(item.name) === normalizedQuery) ??
+        products.find((item) => normalizeSearchText(item.slug) === normalizedQuery) ??
+        products.find((item) => normalizeSearchText(item.name).includes(normalizedQuery));
+      if (localMatch) return localMatch;
+
+      const remote = await getCatalog({
+        page: 1,
+        limit: 8,
+        zoneId: zoneId ?? undefined,
+        q: queryText
+      });
+
+      return (
+        remote.data.find((item) => normalizeSearchText(item.name) === normalizedQuery) ??
+        remote.data.find((item) => normalizeSearchText(item.name).includes(normalizedQuery)) ??
+        remote.data[0] ??
+        null
+      );
+    },
+    [products, zoneId]
+  );
+
+  const resolveVoiceCandidates = React.useCallback(
+    async ({
+      query: queryText,
+      intentType
+    }: {
+      query: string;
+      intentType: VoiceIntentType;
+    }): Promise<VoiceCandidate[]> => {
+      if (!queryText.trim()) return [];
+      if (intentType !== 'SEARCH_PRODUCTS' && intentType !== 'ADD_TO_CART') return [];
+
+      const normalizedQuery = normalizeSearchText(queryText);
+      const unique = new Map<string, VoiceCandidate>();
+
+      products
+        .filter(
+          (item) =>
+            normalizeSearchText(item.name).includes(normalizedQuery) ||
+            normalizeSearchText(item.slug).includes(normalizedQuery)
+        )
+        .slice(0, 3)
+        .forEach((item, idx) => {
+          if (!unique.has(item.slug)) {
+            unique.set(item.slug, { id: `${item.id}-${idx}`, name: item.name, slug: item.slug });
+          }
+        });
+
+      if (unique.size < 3) {
+        const remote = await getCatalog({
+          page: 1,
+          limit: 8,
+          zoneId: zoneId ?? undefined,
+          q: queryText
+        });
+
+        remote.data.forEach((item, idx) => {
+          if (unique.size >= 3) return;
+          if (!unique.has(item.slug)) {
+            unique.set(item.slug, { id: `${item.id}-r-${idx}`, name: item.name, slug: item.slug });
+          }
+        });
+      }
+
+      return Array.from(unique.values()).slice(0, 3);
+    },
+    [products, zoneId]
+  );
+
+  const addToCartByVoice = React.useCallback(
+    async (queryText: string, qty: number) => {
+      const product = await resolveProductForVoice(queryText);
+      if (!product) {
+        setAddError(brandMicrocopy.errors.addToBasketFromCatalog);
+        return;
+      }
+
+      setAddingProductId(product.id);
+      setAddError(null);
+
+      try {
+        let variantId = product.defaultVariantId;
+        if (!variantId) {
+          const detail = await getProductBySlug(product.slug, zoneId ?? undefined);
+          variantId = detail?.variants?.[0]?.id;
+        }
+
+        if (!variantId) throw new Error('missing_variant');
+
+        await addItem({ variantId, qty: Math.max(1, qty) });
+      } catch {
+        setAddError(brandMicrocopy.errors.addToBasketFromCatalog);
+      } finally {
+        setAddingProductId(null);
+      }
+    },
+    [addItem, resolveProductForVoice, zoneId]
+  );
+
+  const trackVoiceEvent = React.useCallback((name: string, payload?: Record<string, unknown>) => {
+    if (!__DEV__) return;
+    // Eventos sin transcripción, solo metadata segura.
+    console.debug('[voice-event]', name, buildSafeVoicePayload(payload as any));
+  }, []);
+
+  const voice = useVoiceAssistant({
+    client: voiceClient ?? inactiveVoiceClient,
+    timeoutMs: 9_500,
+    tracker: trackVoiceEvent,
+    screenContext: 'catalog',
+    rhinoFirst: (process.env.EXPO_PUBLIC_VOICE_RHINO_FIRST ?? '0') === '1',
+    resolveCandidates: resolveVoiceCandidates,
+    actions: {
+      onSearchProducts: async ({ query }) => {
+        setVoiceInfo(null);
+        setAddError(null);
+        setCategorySlug(undefined);
+        setHighlightedProductId(null);
+        setQuery(query);
+      },
+      onAddToCart: async ({ query, qty }) => {
+        setVoiceInfo(null);
+        await addToCartByVoice(query, qty);
+      },
+      onOpenOrders: async () => {
+        (navigation.getParent() as any)?.navigate?.('HomeTab', { screen: 'OrdersMain' });
+      }
+    }
+  });
+
+  React.useEffect(() => {
+    if (wasFocusedRef.current && !isFocused) {
+      void voice.closeSheet();
+    }
+    wasFocusedRef.current = isFocused;
+  }, [isFocused, voice.closeSheet]);
 
   const handleAddFromCatalog = React.useCallback(
     async (product: CatalogProduct) => {
@@ -771,6 +1009,21 @@ export function CatalogScreen({ navigation, route }: Props) {
             returnKeyType="search"
             selectionColor={isDark ? '#7bc7a2' : '#1f8d63'}
           />
+          <VoiceSeedButton
+            status={voice.status}
+            disabled={!voiceEnabled}
+            onPressIn={() => {
+              setVoiceInfo(null);
+              void voice.beginListening();
+            }}
+            onPressOut={() => {
+              void voice.stopListeningAndProcess();
+            }}
+            onPress={() => voice.setSheetVisible(true)}
+            backgroundColor={isDark ? 'rgba(111,168,138,0.15)' : 'rgba(40,179,130,0.12)'}
+            iconColor={isDark ? '#cfe7d9' : '#1f6f52'}
+            borderColor={isDark ? 'rgba(111,168,138,0.34)' : 'rgba(40,179,130,0.34)'}
+          />
           {query.trim().length > 0 || Boolean(categorySlug) || Boolean(highlightedProductId) ? (
             <Animated.View style={clearActionAnimStyle}>
               <Pressable
@@ -793,6 +1046,37 @@ export function CatalogScreen({ navigation, route }: Props) {
             </Animated.View>
           ) : null}
         </AppCard>
+      </Animated.View>
+
+      <Animated.View style={chipsScrollStyle}>
+        <Pressable
+          onPress={() => navigation.getParent()?.navigate('VoiceTab' as never)}
+          style={[
+            styles.voiceAssistStrip,
+            {
+              borderColor: isDark ? 'rgba(111,168,138,0.24)' : 'rgba(40,179,130,0.24)',
+              backgroundColor: isDark ? 'rgba(16,26,21,0.94)' : 'rgba(234,247,240,0.92)'
+            }
+          ]}
+        >
+          <View
+            style={[
+              styles.voiceAssistStripIcon,
+              { backgroundColor: isDark ? 'rgba(111,168,138,0.14)' : 'rgba(40,179,130,0.12)' }
+            ]}
+          >
+            <Feather name="mic" size={15} color={isDark ? '#cfe7d9' : '#1f6f52'} />
+          </View>
+          <View style={styles.voiceAssistStripCopy}>
+            <AppText style={[styles.voiceAssistStripTitle, { color: themeColors.text1 }]}>
+              Buscar con voz
+            </AppText>
+            <AppText style={[styles.voiceAssistStripBody, { color: themeColors.text2 }]}>
+              Abre el asistente y di tu pedido natural (ej. “agrega tomates orgánicos”).
+            </AppText>
+          </View>
+          <Feather name="chevron-right" color={themeColors.text2} size={14} />
+        </Pressable>
       </Animated.View>
 
       <Animated.View style={chipsScrollStyle}>
@@ -831,6 +1115,7 @@ export function CatalogScreen({ navigation, route }: Props) {
       {catalogQuery.isLoading ? <AppText>Cargando productos frescos...</AppText> : null}
       {catalogQuery.isError ? <AppText style={{ color: themeColors.danger }}>No pudimos abrir el mercado. Intenta de nuevo.</AppText> : null}
       {addError ? <AppText style={{ color: themeColors.danger }}>{addError}</AppText> : null}
+      {voiceInfo ? <AppText style={{ color: themeColors.text2 }}>{voiceInfo}</AppText> : null}
 
       {featured ? (
         <ImageBackground
@@ -901,6 +1186,35 @@ export function CatalogScreen({ navigation, route }: Props) {
         scrollEventThrottle={16}
         onScrollEndDrag={onCatalogScrollEnd}
         onMomentumScrollEnd={onCatalogScrollEnd}
+      />
+
+      <VoiceSheet
+        visible={voice.sheetVisible}
+        status={voice.status}
+        transcript={voice.transcript}
+        draftTranscript={voice.draftTranscript}
+        error={voice.error}
+        candidates={voice.candidates}
+        candidatesLoading={voice.candidatesLoading}
+        unsupportedIntent={voice.unsupportedIntent}
+        onClose={() => {
+          void voice.closeSheet();
+        }}
+        onRetry={() => {
+          void voice.beginListening();
+        }}
+        onConfirm={() => {
+          void voice.confirmDraftAndRun();
+        }}
+        onDraftChange={voice.setDraftTranscript}
+        onSelectCandidate={(candidate) => {
+          void voice.selectCandidateAndRun(candidate);
+        }}
+        onOpenOrders={() => {
+          void voice.openOrdersFallback();
+        }}
+        colors={themeColors}
+        isDark={isDark}
       />
 
       <Modal visible={zonePickerOpen} transparent animationType="none" onRequestClose={closeZonePicker}>
@@ -1102,6 +1416,36 @@ const styles = StyleSheet.create({
     color: colors.text1,
     fontSize: 15,
     marginLeft: 8
+  },
+  voiceAssistStrip: {
+    marginTop: 10,
+    marginBottom: 2,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10
+  },
+  voiceAssistStripIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  voiceAssistStripCopy: {
+    flex: 1
+  },
+  voiceAssistStripTitle: {
+    fontSize: 13,
+    fontWeight: '700'
+  },
+  voiceAssistStripBody: {
+    marginTop: 1,
+    fontSize: 11,
+    lineHeight: 14
   },
   clearSearchAction: {
     width: 30,
