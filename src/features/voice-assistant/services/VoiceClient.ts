@@ -31,24 +31,24 @@ export class VoiceClient {
     }
 
     this.startInFlight = true;
-    const permitted = await requestMicPermission(this.permissionProbe);
-    if (!permitted) {
-      this.startInFlight = false;
-      return { ok: false, reason: 'permission_denied' };
-    }
-
     try {
+      const permitted = await requestMicPermission(this.permissionProbe);
+      if (!permitted) {
+        return { ok: false, reason: 'permission_denied' };
+      }
+
       await this.stt.start({ onPartial });
-      this.startInFlight = false;
       return { ok: true };
     } catch {
-      this.startInFlight = false;
       return { ok: false, reason: 'init_error' };
+    } finally {
+      this.startInFlight = false;
     }
   }
 
   async stopListening(options?: VoiceStopOptions): Promise<VoiceStopResult> {
     const result = await this.stt.stop();
+    this.startInFlight = false;
     const rhinoUsed = Boolean(options?.rhinoFirst);
     const rhinoSuccess = Boolean(options?.rhinoFirst && result.finalRhinoUnderstood && result.finalRhinoIntent);
 
@@ -81,6 +81,7 @@ export class VoiceClient {
   }
 
   async dispose(): Promise<void> {
+    this.startInFlight = false;
     await this.stt.dispose();
     await this.tts.stop();
   }

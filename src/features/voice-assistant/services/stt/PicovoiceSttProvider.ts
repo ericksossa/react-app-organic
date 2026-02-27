@@ -139,6 +139,8 @@ export class PicovoiceSttProvider implements SttProvider {
     const vp = this.modules?.VoiceProcessor.instance;
     if (!vp || !this.cheetah || !this.rhino) throw new Error('Motores de voz no inicializados.');
 
+    // Defensive reset in case a previous session left processing state stuck.
+    this.busy = false;
     this.partialTranscript = '';
     this.latestInference = null;
 
@@ -192,9 +194,14 @@ export class PicovoiceSttProvider implements SttProvider {
 
     const vp = this.modules.VoiceProcessor.instance;
     if (this.listening) {
-      await vp.stop();
-      if (this.frameListener) vp.removeFrameListener(this.frameListener);
+      try {
+        await vp.stop();
+      } finally {
+        if (this.frameListener) vp.removeFrameListener(this.frameListener);
+      }
       this.listening = false;
+      this.frameListener = null;
+      this.busy = false;
     }
 
     const flushResult = await this.cheetah.flush();
@@ -223,11 +230,16 @@ export class PicovoiceSttProvider implements SttProvider {
 
     const vp = this.modules.VoiceProcessor.instance;
     if (this.listening) {
-      await vp.stop();
-      if (this.frameListener) vp.removeFrameListener(this.frameListener);
+      try {
+        await vp.stop();
+      } finally {
+        if (this.frameListener) vp.removeFrameListener(this.frameListener);
+      }
       this.listening = false;
     }
 
+    this.frameListener = null;
+    this.busy = false;
     this.partialTranscript = '';
     this.latestInference = null;
   }

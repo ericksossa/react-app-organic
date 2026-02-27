@@ -1,27 +1,27 @@
 diff --git a/node_modules/@picovoice/react-native-voice-processor/react-native-voice-processor.podspec b/node_modules/@picovoice/react-native-voice-processor/react-native-voice-processor.podspec
-index 2a1f0aa..f53f9b1 100644
+index 9529917..795ae5a 100644
 --- a/node_modules/@picovoice/react-native-voice-processor/react-native-voice-processor.podspec
 +++ b/node_modules/@picovoice/react-native-voice-processor/react-native-voice-processor.podspec
-@@ -21,21 +21,10 @@ Pod::Spec.new do |s|
-   s.dependency "React-Core"
-   s.dependency 'ios-voice-processor', '~> 1.2.0'
- 
--  # Don't install the dependencies when we run `pod install` in the old architecture.
--  if ENV['RCT_NEW_ARCH_ENABLED'] == '1' then
--    s.compiler_flags = folly_compiler_flags + " -DRCT_NEW_ARCH_ENABLED=1"
--    s.pod_target_xcconfig    = {
--        "HEADER_SEARCH_PATHS" => "\"$(PODS_ROOT)/boost\"",
--        "OTHER_CPLUSPLUSFLAGS" => "-DFOLLY_NO_CONFIG -DFOLLY_MOBILE=1 -DFOLLY_USE_LIBCPP=1",
--        "CLANG_CXX_LANGUAGE_STANDARD" => "c++17"
--    }
--    s.dependency "React-Codegen"
+@@ -28,7 +28,6 @@ Pod::Spec.new do |s|
+         "CLANG_CXX_LANGUAGE_STANDARD" => "c++17"
+     }
+     s.dependency "React-Codegen"
 -    s.dependency "RCT-Folly"
--    s.dependency "RCTRequired"
--    s.dependency "RCTTypeSafety"
--    s.dependency "ReactCommon/turbomodule/core"
--  end
-+  # This package implements a classic bridge module (RCTEventEmitter) on iOS.
-+  # Older releases add New Architecture-specific pod dependencies (e.g. RCT-Folly)
-+  # that can fail to resolve on newer RN/Expo stacks. Avoid them here.
- end
-
+     s.dependency "RCTRequired"
+     s.dependency "RCTTypeSafety"
+     s.dependency "ReactCommon/turbomodule/core"
+diff --git a/node_modules/@picovoice/react-native-voice-processor/ios/VoiceProcessor.swift b/node_modules/@picovoice/react-native-voice-processor/ios/VoiceProcessor.swift
+--- a/node_modules/@picovoice/react-native-voice-processor/ios/VoiceProcessor.swift
++++ b/node_modules/@picovoice/react-native-voice-processor/ios/VoiceProcessor.swift
+@@ -28,8 +28,10 @@ class PvVoiceProcessor: RCTEventEmitter {
+     public override init() {
+         super.init()
+         voiceProcessor.addFrameListener(VoiceProcessorFrameListener({ frame in
++            // Normalize samples to Double to avoid mixed-type payloads in RN bridge events.
++            let normalizedFrame: [Double] = frame.map { Double(Int($0)) }
+             DispatchQueue.main.async {
+-                self.sendEvent(withName: self.frameEmitterKey, body: Array(frame))
++                self.sendEvent(withName: self.frameEmitterKey, body: normalizedFrame)
+             }
+         }))
+ 

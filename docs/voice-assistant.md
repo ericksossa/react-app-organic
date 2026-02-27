@@ -47,6 +47,12 @@ Comportamiento default: parser actual (STT + reglas).
 Flag opcional:
 - `EXPO_PUBLIC_VOICE_RHINO_FIRST=1`
 
+## Configuración segura de PicoVoice AccessKey
+- No dejes el AccessKey hardcodeado en el código fuente.
+- Configura `PICOVOICE_ACCESS_KEY` como secreto de entorno en CI/EAS (recomendado).
+- Para pruebas locales, como fallback, puedes usar `EXPO_PUBLIC_PICOVOICE_ACCESS_KEY`.
+- El app toma primero `extra.picovoiceAccessKey` (inyectado por `app.config.ts`) y luego el fallback local.
+
 Con flag activo:
 - `VoiceClient.stopListening({ rhinoFirst: true })` reporta `rhinoHint`.
 - `useVoiceAssistant` compara Rhino vs parser y emite telemetría:

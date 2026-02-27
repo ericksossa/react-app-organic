@@ -1,21 +1,20 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useFocusEffect, useIsFocused } from '@react-navigation/native';
-import { useReducedMotionSetting } from '../../../design/motion/useReducedMotionSetting';
+import { useIsFocused } from '@react-navigation/native';
 import { getCatalog, getProductBySlug } from '../../../services/api/catalogApi';
 import { useAvailabilityStore } from '../../../state/availabilityStore';
 import { useCartStore } from '../../../state/cartStore';
+import { VoiceCard } from '../../../components/voice/VoiceCard';
+import { VoiceCopy } from '../../../components/voice/VoiceCopy';
+import { VoiceDock } from '../../../components/voice/VoiceDock';
+import { VoiceHeader } from '../../../components/voice/VoiceHeader';
+import { AuroraOrb } from '../../../components/voice/AuroraOrb';
 import { buildSafeVoicePayload } from '../analytics/voiceEvents';
 import { VoiceCandidate, VoiceIntentType } from '../domain/intents';
 import { VoiceClient } from '../services/VoiceClient';
 import { PicovoiceSttProvider } from '../services/stt/PicovoiceSttProvider';
 import { NoopTtsService } from '../services/tts/TtsService';
 import { useVoiceAssistant } from '../state/useVoiceAssistant';
-import { VoiceCard } from './VoiceCard';
-import { VoiceDock } from './VoiceDock';
-import { VoiceOrb } from './VoiceOrb';
-import { VoiceStatus } from './VoiceStatus';
-import { useVoiceEnergy } from './useVoiceEnergy';
 
 type VoiceOrbScreenProps = {
   accessKey: string;
@@ -35,34 +34,11 @@ function normalizeSearchText(value: string): string {
     .trim();
 }
 
-function topCopy(status: ReturnType<typeof useVoiceAssistant>['status']): string {
+function statusLabelCopy(status: ReturnType<typeof useVoiceAssistant>['status']): string {
   switch (status) {
-    case 'listening':
-      return 'Escuchando…';
-    case 'processing':
-      return 'Procesando…';
-    case 'review':
-      return 'Revisa lo que entendí';
-    case 'error':
-      return 'No te escuché bien, intenta de nuevo';
     default:
-      return 'Toca el micrófono para hablar';
+      return 'Listening...';
   }
-}
-
-function resolveTranscriptPreview({
-  status,
-  transcript,
-  draftTranscript
-}: {
-  status: ReturnType<typeof useVoiceAssistant>['status'];
-  transcript: string;
-  draftTranscript: string;
-}): string {
-  if (status === 'review' && draftTranscript.trim()) return draftTranscript.trim();
-  if (transcript.trim()) return transcript.trim();
-  if (status === 'listening') return 'Te escucho...';
-  return '';
 }
 
 function unsupportedCopy(intent: VoiceIntentType | null): string {
@@ -81,18 +57,9 @@ export function VoiceOrbScreen({
   onOpenOrders
 }: VoiceOrbScreenProps) {
   const isFocused = useIsFocused();
-  const reduceMotion = useReducedMotionSetting();
   const zoneId = useAvailabilityStore((s) => s.selectedZoneId);
   const addItem = useCartStore((s) => s.addItem);
   const wasFocusedRef = React.useRef(isFocused);
-  const [animationsActive, setAnimationsActive] = React.useState(true);
-
-  useFocusEffect(
-    React.useCallback(() => {
-      setAnimationsActive(true);
-      return () => setAnimationsActive(false);
-    }, [])
-  );
 
   const inactiveClient = React.useMemo(
     () =>
@@ -220,38 +187,31 @@ export function VoiceOrbScreen({
     wasFocusedRef.current = isFocused;
   }, [isFocused, voice.closeSheet]);
 
-  const energy = useVoiceEnergy(voice.status, voice.transcript, reduceMotion);
   const disabled = !enabled || !voiceClient;
-  const transcriptPreview = resolveTranscriptPreview({
-    status: voice.status,
-    transcript: voice.transcript,
-    draftTranscript: voice.draftTranscript
-  });
   const showReviewEditor = voice.status === 'review';
   const showTopMatches = showReviewEditor && voice.candidates.length > 1;
   const showUnsupported = Boolean(voice.unsupportedIntent);
   const showError = voice.status === 'error' && Boolean(voice.error);
   const showOpenOrders = voice.unsupportedIntent === 'REPEAT_LAST_ORDER' || voice.unsupportedIntent === 'TRACK_ORDER';
+  const copyTitle = voice.status === 'listening' ? 'Te escucho...' : 'Toca para hablar';
+  const copySubtitle = 'Busca tomate.';
+  const auroraState = voice.status === 'listening' ? 'listening' : voice.status === 'processing' ? 'processing' : 'idle';
 
   return (
     <View style={styles.container}>
       <VoiceCard
-        top={
-          <Text numberOfLines={1} style={styles.topLabel}>
-            {topCopy(voice.status)}
-          </Text>
-        }
-        center={<VoiceOrb status={voice.status} voiceEnergy={energy} reduceMotion={reduceMotion} active={animationsActive} />}
-        bottom={
-          <View style={styles.bottomArea}>
-            <VoiceStatus status={voice.status} />
-            {transcriptPreview ? (
-              <Text style={styles.transcript} numberOfLines={2} ellipsizeMode="tail">
-                {transcriptPreview}
-              </Text>
-            ) : (
-              <View style={styles.transcriptSpacer} />
-            )}
+        top={<VoiceHeader />}
+        center={
+          <View style={styles.centerContent}>
+            <Text numberOfLines={1} style={styles.statusLabel}>
+              {statusLabelCopy(voice.status)}
+            </Text>
+
+            <AuroraOrb state={auroraState} size={230} />
+
+            <View style={styles.copyWrap}>
+              <VoiceCopy title={copyTitle} subtitle={copySubtitle} />
+            </View>
 
             {showReviewEditor ? (
               <View style={styles.reviewPanel}>
@@ -321,20 +281,23 @@ export function VoiceOrbScreen({
                 <Text style={styles.errorText}>{voice.error}</Text>
               </View>
             ) : null}
-
+          </View>
+        }
+        bottom={
+          <View style={styles.bottomArea}>
             <VoiceDock
-            status={voice.status}
-            disabled={disabled}
-            onPause={() => {
-              void voice.cancelListening();
-            }}
-            onMicPressIn={() => {
-              void voice.beginListening();
-            }}
-            onMicPressOut={() => {
-              void voice.stopListeningAndProcess();
-            }}
-          />
+              status={voice.status}
+              disabled={disabled}
+              onPause={() => {
+                void voice.cancelListening();
+              }}
+              onMicPressIn={() => {
+                void voice.beginListening();
+              }}
+              onMicPressOut={() => {
+                void voice.stopListeningAndProcess();
+              }}
+            />
           </View>
         }
       />
@@ -345,34 +308,35 @@ export function VoiceOrbScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 0,
+    paddingVertical: 0
+  },
+  centerContent: {
+    width: '100%',
+    alignItems: 'center',
     justifyContent: 'center'
   },
-  topLabel: {
-    textAlign: 'center',
-    color: 'rgba(43,43,43,0.7)',
-    fontSize: 15,
+  statusLabel: {
+    marginTop: 18,
+    marginBottom: 24,
+    color: 'rgba(28,28,30,0.55)',
+    fontSize: 14,
+    lineHeight: 18,
     fontWeight: '500',
-    marginBottom: 14
+    textAlign: 'center'
+  },
+  copyWrap: {
+    marginTop: 30,
+    width: '100%'
   },
   bottomArea: {
     width: '100%',
-    alignItems: 'center'
-  },
-  transcript: {
-    marginTop: 10,
-    color: '#1C1C1E',
-    fontSize: 18,
-    lineHeight: 24,
-    fontWeight: '700',
-    textAlign: 'center',
-    maxWidth: '84%',
-    minHeight: 48
-  },
-  transcriptSpacer: {
-    height: 48
+    alignItems: 'center',
+    marginTop: 18
   },
   reviewPanel: {
-    marginTop: 12,
+    marginTop: 16,
     width: '100%',
     gap: 10
   },
@@ -384,7 +348,7 @@ const styles = StyleSheet.create({
     color: '#1C1C1E',
     paddingHorizontal: 14,
     paddingVertical: 12,
-    fontSize: 16
+    fontSize: 15
   },
   candidatesRow: {
     flexDirection: 'row',
@@ -422,7 +386,7 @@ const styles = StyleSheet.create({
     fontWeight: '600'
   },
   unsupportedBox: {
-    marginTop: 10,
+    marginTop: 14,
     width: '100%',
     borderRadius: 14,
     borderWidth: 1,
@@ -451,7 +415,7 @@ const styles = StyleSheet.create({
     fontWeight: '600'
   },
   errorBox: {
-    marginTop: 10,
+    marginTop: 12,
     width: '100%',
     borderRadius: 12,
     backgroundColor: 'rgba(177,67,67,0.18)',

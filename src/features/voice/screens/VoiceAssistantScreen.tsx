@@ -4,6 +4,8 @@ import { StyleSheet, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { VoiceOrbScreen } from '../../voice-assistant/ui/VoiceOrbScreen';
+import { getPicovoiceAccessKey } from '../../voice-assistant/config/picovoice';
+import { useTheme } from '../../../shared/theme/useTheme';
 
 function envValue(key: string): string {
   return (process.env[key] ?? '').trim();
@@ -11,14 +13,14 @@ function envValue(key: string): string {
 
 export function VoiceAssistantScreen() {
   const navigation = useNavigation();
+  const { colors } = useTheme();
   const [bundledAssets, setBundledAssets] = React.useState<{
     cheetahModelPath?: string;
     rhinoContextPath?: string;
   }>({});
   const [assetsReady, setAssetsReady] = React.useState(false);
 
-  const accessKey =
-    envValue('EXPO_PUBLIC_PICOVOICE_ACCESS_KEY') || 'ULsNVp4KnQD54mcBQxlUQqnvqgleLLc9n/h+d5r2zOOKE86zaru8sw==';
+  const accessKey = getPicovoiceAccessKey();
   const cheetahModelPath =
     envValue('EXPO_PUBLIC_PICOVOICE_CHEETAH_MODEL_PATH') || bundledAssets.cheetahModelPath || '';
   const rhinoContextPath =
@@ -56,7 +58,7 @@ export function VoiceAssistantScreen() {
   }, []);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
       <View style={styles.content}>
         <VoiceOrbScreen
           accessKey={accessKey}
@@ -86,8 +88,7 @@ export function VoiceAssistantScreen() {
 
 const styles = StyleSheet.create({
   safeArea: {
-    flex: 1,
-    backgroundColor: '#F4F6F2'
+    flex: 1
   },
   content: {
     flex: 1,

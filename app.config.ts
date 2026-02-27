@@ -6,21 +6,35 @@ const config: ExpoConfig = {
   scheme: 'organicapp',
   version: '1.0.0',
   orientation: 'portrait',
+
+  // (si usas Reanimated 4) deja newArchEnabled en root
+  newArchEnabled: true,
+
   ios: {
     bundleIdentifier: 'io.organicapp.mobile',
     supportsTablet: true,
-    deploymentTarget: '16.0',
     infoPlist: {
-      NSMicrophoneUsageDescription: 'GreenCart usa el micrófono para búsqueda y asistente de voz on-device.'
+      NSMicrophoneUsageDescription:
+        'GreenCart usa el micrófono para búsqueda y asistente de voz on-device.'
     }
   },
-  android: {
-    package: 'io.organicapp.mobile'
+
+ android: { package: 'io.organicapp.mobile' },
+ extra: {
+    apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:3000/green-cart/v1',
+    picovoiceAccessKey: process.env.PICOVOICE_ACCESS_KEY ?? process.env.EXPO_PUBLIC_PICOVOICE_ACCESS_KEY ?? ''
   },
-  extra: {
-    apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:3000/green-cart/v1'
-  },
-  plugins: ['expo-secure-store']
+  plugins: [
+    'expo-secure-store',
+    [
+      'expo-build-properties',
+      {
+        ios: {
+          deploymentTarget: '16.0' // ⚠️ cambia a lo que pida el podspec de Cheetah
+        }
+      }
+    ]
+  ]
 };
 
 export default config;

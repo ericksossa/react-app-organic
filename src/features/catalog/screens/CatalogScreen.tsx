@@ -58,6 +58,7 @@ import { PicovoiceSttProvider } from '../../voice-assistant/services/stt/Picovoi
 import { NoopTtsService } from '../../voice-assistant/services/tts/TtsService';
 import { buildSafeVoicePayload } from '../../voice-assistant/analytics/voiceEvents';
 import { VoiceCandidate, VoiceIntentType } from '../../voice-assistant/domain/intents';
+import { getPicovoiceAccessKey } from '../../voice-assistant/config/picovoice';
 
 type Props = NativeStackScreenProps<CatalogStackParamList, 'CatalogMain'>;
 const ZONE_SHEET_ANIM_MS = 280;
@@ -432,8 +433,7 @@ export function CatalogScreen({ navigation, route }: Props) {
   const routeInitialCategorySlug = route.params?.initialCategorySlug;
   const routeInitialProductSlug = route.params?.initialProductSlug;
   const lastAppliedRouteSeedRef = React.useRef('');
-  const voiceAccessKey =
-    envValue('EXPO_PUBLIC_PICOVOICE_ACCESS_KEY') || 'ULsNVp4KnQD54mcBQxlUQqnvqgleLLc9n/h+d5r2zOOKE86zaru8sw==';
+  const voiceAccessKey = getPicovoiceAccessKey();
   const voiceCheetahModelPath =
     envValue('EXPO_PUBLIC_PICOVOICE_CHEETAH_MODEL_PATH') || voiceAssets.cheetahModelPath || '';
   const voiceRhinoContextPath =
