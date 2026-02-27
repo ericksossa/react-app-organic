@@ -1,6 +1,13 @@
 import React from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
+import { buildSafeVoicePayload } from '../analytics/voiceEvents';
+import { VoiceCandidate, VoiceIntentType } from '../domain/intents';
+import { VoiceClient } from '../services/VoiceClient';
+import { PicovoiceSttProvider } from '../services/stt/PicovoiceSttProvider';
+import { NoopTtsService } from '../services/tts/TtsService';
+import { useVoiceAssistant } from '../state/useVoiceAssistant';
 import { useTheme } from '../../../shared/theme/useTheme';
 import { AppText } from '../../../shared/ui/AppText';
 import { getCatalog, getProductBySlug } from '../../../services/api/catalogApi';
@@ -8,11 +15,6 @@ import { useAvailabilityStore } from '../../../state/availabilityStore';
 import { useCartStore } from '../../../state/cartStore';
 import { VoiceSeedButton } from './VoiceSeedButton';
 import { VoiceSheet } from './VoiceSheet';
-import { useVoiceAssistant } from '../state/useVoiceAssistant';
-import { VoiceClient } from '../services/VoiceClient';
-import { PicovoiceSttProvider } from '../services/stt/PicovoiceSttProvider';
-import { NoopTtsService } from '../services/tts/TtsService';
-import { buildSafeVoicePayload } from '../analytics/voiceEvents';
 
 type VoiceAssistantDockProps = {
   accessKey: string;
@@ -22,6 +24,7 @@ type VoiceAssistantDockProps = {
   enabled?: boolean;
   style?: object;
   onOpenCatalog?: (params: { query?: string; categorySlug?: string }) => void;
+  onOpenOrders?: () => void;
 };
 
 function normalizeSearchText(value: string): string {
@@ -32,6 +35,14 @@ function normalizeSearchText(value: string): string {
     .trim();
 }
 
+function toCandidate(item: { id: string; name: string; slug: string }, idx: number): VoiceCandidate {
+  return {
+    id: `${item.id}-${idx}`,
+    name: item.name,
+    slug: item.slug
+  };
+}
+
 export function VoiceAssistantDock({
   accessKey,
   cheetahModelPath,
@@ -39,9 +50,12 @@ export function VoiceAssistantDock({
   rhinoModelPath,
   enabled = true,
   style,
-  onOpenCatalog
+  onOpenCatalog,
+  onOpenOrders
 }: VoiceAssistantDockProps) {
   const { colors, isDark } = useTheme();
+  const isFocused = useIsFocused();
+  const wasFocusedRef = React.useRef(isFocused);
   const zoneId = useAvailabilityStore((s) => s.selectedZoneId);
   const addItem = useCartStore((s) => s.addItem);
   const [hint, setHint] = React.useState<string | null>(null);
@@ -101,15 +115,54 @@ export function VoiceAssistantDock({
     [zoneId]
   );
 
+  const resolveCandidates = React.useCallback(
+    async ({ query, intentType }: { query: string; intentType: VoiceIntentType }) => {
+      if (!query.trim()) return [];
+      if (intentType !== 'SEARCH_PRODUCTS' && intentType !== 'ADD_TO_CART') return [];
+
+      const response = await getCatalog({
+        page: 1,
+        limit: 8,
+        zoneId: zoneId ?? undefined,
+        q: query
+      });
+
+      const normalized = normalizeSearchText(query);
+      const unique = new Map<string, VoiceCandidate>();
+
+      response.data
+        .filter((item) => normalizeSearchText(item.name).includes(normalized) || normalizeSearchText(item.slug).includes(normalized))
+        .forEach((item, idx) => {
+          const candidate = toCandidate(item, idx);
+          if (!unique.has(item.slug)) unique.set(item.slug, candidate);
+        });
+
+      if (unique.size === 0) {
+        response.data.slice(0, 3).forEach((item, idx) => {
+          const candidate = toCandidate(item, idx);
+          if (!unique.has(item.slug)) unique.set(item.slug, candidate);
+        });
+      }
+
+      return Array.from(unique.values()).slice(0, 3);
+    },
+    [zoneId]
+  );
+
   const trackVoiceEvent = React.useCallback((name: string, payload?: Record<string, unknown>) => {
     if (!__DEV__) return;
     console.debug('[voice-event]', name, buildSafeVoicePayload(payload as any));
   }, []);
 
+  const rhinoFirstEnabled = (process.env.EXPO_PUBLIC_VOICE_RHINO_FIRST ?? '0') === '1';
+
   const voice = useVoiceAssistant({
     client: voiceClient ?? inactiveClient,
     timeoutMs: 9_500,
     tracker: trackVoiceEvent,
+    screenContext: 'voice',
+    rhinoFirst: rhinoFirstEnabled,
+    resolveCandidates,
     actions: {
       onSearchProducts: async ({ query }) => {
         setHint(null);
@@ -137,14 +190,18 @@ export function VoiceAssistantDock({
         await addItem({ variantId, qty: Math.max(1, qty) });
         setHint(`Agregado: ${product.name}`);
       },
-      onRepeatLastOrder: async () => {
-        setHint('Pronto: repetición de última compra por voz.');
-      },
-      onTrackOrder: async () => {
-        setHint('Pronto: seguimiento de pedido por voz.');
+      onOpenOrders: async () => {
+        onOpenOrders?.();
       }
     }
   });
+
+  React.useEffect(() => {
+    if (wasFocusedRef.current && !isFocused) {
+      void voice.closeSheet();
+    }
+    wasFocusedRef.current = isFocused;
+  }, [isFocused, voice.closeSheet]);
 
   const disabled = !enabled || !voiceClient;
 
@@ -184,9 +241,7 @@ export function VoiceAssistantDock({
 
         <View style={[styles.micBadge, { borderColor: colors.border1, backgroundColor: isDark ? '#0e1813' : '#f2f8f4' }]}>
           <Feather name="mic" size={13} color={colors.text1} />
-          <AppText style={[styles.micLabel, { color: colors.text1 }]}>
-            {disabled ? 'Voice setup' : 'Hablar ahora'}
-          </AppText>
+          <AppText style={[styles.micLabel, { color: colors.text1 }]}>{disabled ? 'Voice setup' : 'Hablar ahora'}</AppText>
         </View>
       </View>
 
@@ -196,6 +251,9 @@ export function VoiceAssistantDock({
         transcript={voice.transcript}
         draftTranscript={voice.draftTranscript}
         error={voice.error}
+        candidates={voice.candidates}
+        candidatesLoading={voice.candidatesLoading}
+        unsupportedIntent={voice.unsupportedIntent}
         onClose={() => {
           void voice.closeSheet();
         }}
@@ -206,6 +264,12 @@ export function VoiceAssistantDock({
           void voice.confirmDraftAndRun();
         }}
         onDraftChange={voice.setDraftTranscript}
+        onSelectCandidate={(candidate) => {
+          void voice.selectCandidateAndRun(candidate);
+        }}
+        onOpenOrders={() => {
+          void voice.openOrdersFallback();
+        }}
         colors={colors}
         isDark={isDark}
       />

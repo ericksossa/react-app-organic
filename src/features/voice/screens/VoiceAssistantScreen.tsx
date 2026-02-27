@@ -170,6 +170,11 @@ export function VoiceAssistantScreen() {
                 }
               });
             }}
+            onOpenOrders={() => {
+              (navigation.getParent() as any)?.navigate?.('HomeTab', {
+                screen: 'OrdersMain'
+              });
+            }}
             style={styles.assistantDock}
           />
           <View style={styles.placeholderSpace} />

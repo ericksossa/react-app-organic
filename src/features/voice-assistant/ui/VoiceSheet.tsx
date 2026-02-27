@@ -1,9 +1,10 @@
 import React from 'react';
 import { Modal, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { AppText } from '../../../shared/ui/AppText';
-import { AppButton } from '../../../shared/ui/AppButton';
+import { VoiceCandidate, VoiceIntentType } from '../domain/intents';
 import { VoiceAssistantStatus } from '../state/useVoiceAssistant';
+import { AppButton } from '../../../shared/ui/AppButton';
+import { AppText } from '../../../shared/ui/AppText';
 import { VoiceWaveform } from './VoiceWaveform';
 
 type VoiceSheetProps = {
@@ -12,10 +13,15 @@ type VoiceSheetProps = {
   transcript: string;
   draftTranscript: string;
   error: string | null;
+  candidates: VoiceCandidate[];
+  candidatesLoading: boolean;
+  unsupportedIntent: VoiceIntentType | null;
   onClose: () => void;
   onRetry: () => void;
   onConfirm: () => void;
   onDraftChange: (value: string) => void;
+  onSelectCandidate: (candidate: VoiceCandidate) => void;
+  onOpenOrders: () => void;
   colors: {
     bg: string;
     text1: string;
@@ -53,14 +59,20 @@ export function VoiceSheet({
   transcript,
   draftTranscript,
   error,
+  candidates,
+  candidatesLoading,
+  unsupportedIntent,
   onClose,
   onRetry,
   onConfirm,
   onDraftChange,
+  onSelectCandidate,
+  onOpenOrders,
   colors,
   isDark
 }: VoiceSheetProps) {
   const showEditable = status === 'review';
+  const showTopMatches = showEditable && (candidates.length > 0 || candidatesLoading);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -92,6 +104,9 @@ export function VoiceSheet({
             ]}
           >
             <VoiceWaveform active={status === 'listening' || status === 'processing'} color={isDark ? '#9dd1b7' : '#1e7253'} />
+            {status === 'listening' ? (
+              <AppText style={[styles.partialLabel, { color: colors.text2 }]}>Transcripción parcial</AppText>
+            ) : null}
             <AppText style={[styles.transcript, { color: colors.text1 }]}>{transcript || 'Te escucho...'}</AppText>
           </View>
 
@@ -113,12 +128,62 @@ export function VoiceSheet({
             />
           ) : null}
 
+          {showTopMatches ? (
+            <View
+              style={[
+                styles.matchesCard,
+                {
+                  borderColor: colors.border1,
+                  backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'
+                }
+              ]}
+            >
+              <AppText style={[styles.matchesTitle, { color: colors.text1 }]}>Top matches</AppText>
+              {candidatesLoading ? <AppText style={{ color: colors.text2 }}>Buscando opciones...</AppText> : null}
+              {candidates.map((candidate) => (
+                <Pressable
+                  key={candidate.id}
+                  onPress={() => onSelectCandidate(candidate)}
+                  style={[styles.matchItem, { borderColor: colors.border1 }]}
+                >
+                  <AppText style={[styles.matchText, { color: colors.text1 }]} numberOfLines={1}>
+                    {candidate.name}
+                  </AppText>
+                  <Feather name="arrow-up-right" size={14} color={colors.text2} />
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+
+          {unsupportedIntent ? (
+            <View
+              style={[
+                styles.unsupportedCard,
+                {
+                  borderColor: colors.border1,
+                  backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'
+                }
+              ]}
+            >
+              <AppText style={[styles.unsupportedTitle, { color: colors.text1 }]}>Aún no disponible</AppText>
+              <AppText style={{ color: colors.text2 }}>
+                {unsupportedIntent === 'REPEAT_LAST_ORDER'
+                  ? 'Repetir última compra por voz aún no está habilitado.'
+                  : 'Seguimiento de pedido por voz aún no está habilitado.'}
+              </AppText>
+              <AppButton
+                title="Open Orders"
+                onPress={onOpenOrders}
+                style={{ alignSelf: 'flex-start', backgroundColor: colors.cta }}
+                titleStyle={{ color: colors.ctaText }}
+              />
+            </View>
+          ) : null}
+
           {error ? <AppText style={{ color: colors.danger }}>{error}</AppText> : null}
 
           <View style={styles.actions}>
-            {showEditable ? (
-              <AppButton title="Confirmar" onPress={onConfirm} style={{ flex: 1 }} />
-            ) : null}
+            {showEditable ? <AppButton title="Confirmar" onPress={onConfirm} style={{ flex: 1 }} /> : null}
             {status === 'permission_denied' || status === 'error' ? (
               <AppButton
                 title="Reintentar"
@@ -170,6 +235,10 @@ const styles = StyleSheet.create({
     padding: 10,
     gap: 8
   },
+  partialLabel: {
+    fontSize: 12,
+    fontWeight: '600'
+  },
   transcript: {
     fontSize: 15,
     lineHeight: 20
@@ -180,6 +249,40 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 10,
     textAlignVertical: 'top'
+  },
+  matchesCard: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 10,
+    gap: 8
+  },
+  matchesTitle: {
+    fontSize: 13,
+    fontWeight: '700'
+  },
+  matchItem: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between'
+  },
+  matchText: {
+    flex: 1,
+    fontSize: 14,
+    marginRight: 8
+  },
+  unsupportedCard: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 10,
+    gap: 8
+  },
+  unsupportedTitle: {
+    fontSize: 15,
+    fontWeight: '700'
   },
   actions: {
     flexDirection: 'row',

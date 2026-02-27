@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
+import { useIsFocused } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Feather } from '@expo/vector-icons';
 import { Asset } from 'expo-asset';
@@ -56,6 +57,7 @@ import { VoiceClient } from '../../voice-assistant/services/VoiceClient';
 import { PicovoiceSttProvider } from '../../voice-assistant/services/stt/PicovoiceSttProvider';
 import { NoopTtsService } from '../../voice-assistant/services/tts/TtsService';
 import { buildSafeVoicePayload } from '../../voice-assistant/analytics/voiceEvents';
+import { VoiceCandidate, VoiceIntentType } from '../../voice-assistant/domain/intents';
 
 type Props = NativeStackScreenProps<CatalogStackParamList, 'CatalogMain'>;
 const ZONE_SHEET_ANIM_MS = 280;
@@ -320,6 +322,7 @@ const CatalogRow = React.memo(function CatalogRow({
 
 export function CatalogScreen({ navigation, route }: Props) {
   const { colors: themeColors, isDark } = useTheme();
+  const isFocused = useIsFocused();
   const reduceMotion = useReducedMotionSetting();
   const zoneId = useAvailabilityStore((s) => s.selectedZoneId);
   const selectedZone = useAvailabilityStore((s) => s.selectedZone);
@@ -339,6 +342,7 @@ export function CatalogScreen({ navigation, route }: Props) {
     rhinoModelPath?: string;
   }>({});
   const [voiceAssetsReady, setVoiceAssetsReady] = React.useState(false);
+  const wasFocusedRef = React.useRef(isFocused);
   const zoneSheetProgress = useSharedValue(0);
   const searchFocusProgress = useSharedValue(0);
   const catalogScrollY = useSharedValue(0);
@@ -497,6 +501,54 @@ export function CatalogScreen({ navigation, route }: Props) {
     [products, zoneId]
   );
 
+  const resolveVoiceCandidates = React.useCallback(
+    async ({
+      query: queryText,
+      intentType
+    }: {
+      query: string;
+      intentType: VoiceIntentType;
+    }): Promise<VoiceCandidate[]> => {
+      if (!queryText.trim()) return [];
+      if (intentType !== 'SEARCH_PRODUCTS' && intentType !== 'ADD_TO_CART') return [];
+
+      const normalizedQuery = normalizeSearchText(queryText);
+      const unique = new Map<string, VoiceCandidate>();
+
+      products
+        .filter(
+          (item) =>
+            normalizeSearchText(item.name).includes(normalizedQuery) ||
+            normalizeSearchText(item.slug).includes(normalizedQuery)
+        )
+        .slice(0, 3)
+        .forEach((item, idx) => {
+          if (!unique.has(item.slug)) {
+            unique.set(item.slug, { id: `${item.id}-${idx}`, name: item.name, slug: item.slug });
+          }
+        });
+
+      if (unique.size < 3) {
+        const remote = await getCatalog({
+          page: 1,
+          limit: 8,
+          zoneId: zoneId ?? undefined,
+          q: queryText
+        });
+
+        remote.data.forEach((item, idx) => {
+          if (unique.size >= 3) return;
+          if (!unique.has(item.slug)) {
+            unique.set(item.slug, { id: `${item.id}-r-${idx}`, name: item.name, slug: item.slug });
+          }
+        });
+      }
+
+      return Array.from(unique.values()).slice(0, 3);
+    },
+    [products, zoneId]
+  );
+
   const addToCartByVoice = React.useCallback(
     async (queryText: string, qty: number) => {
       const product = await resolveProductForVoice(queryText);
@@ -537,6 +589,9 @@ export function CatalogScreen({ navigation, route }: Props) {
     client: voiceClient ?? inactiveVoiceClient,
     timeoutMs: 9_500,
     tracker: trackVoiceEvent,
+    screenContext: 'catalog',
+    rhinoFirst: (process.env.EXPO_PUBLIC_VOICE_RHINO_FIRST ?? '0') === '1',
+    resolveCandidates: resolveVoiceCandidates,
     actions: {
       onSearchProducts: async ({ query }) => {
         setVoiceInfo(null);
@@ -549,14 +604,18 @@ export function CatalogScreen({ navigation, route }: Props) {
         setVoiceInfo(null);
         await addToCartByVoice(query, qty);
       },
-      onRepeatLastOrder: async () => {
-        setVoiceInfo('Pronto: repetición de última compra por voz.');
-      },
-      onTrackOrder: async () => {
-        setVoiceInfo('Pronto: seguimiento de pedido por voz.');
+      onOpenOrders: async () => {
+        (navigation.getParent() as any)?.navigate?.('HomeTab', { screen: 'OrdersMain' });
       }
     }
   });
+
+  React.useEffect(() => {
+    if (wasFocusedRef.current && !isFocused) {
+      void voice.closeSheet();
+    }
+    wasFocusedRef.current = isFocused;
+  }, [isFocused, voice.closeSheet]);
 
   const handleAddFromCatalog = React.useCallback(
     async (product: CatalogProduct) => {
@@ -1135,6 +1194,9 @@ export function CatalogScreen({ navigation, route }: Props) {
         transcript={voice.transcript}
         draftTranscript={voice.draftTranscript}
         error={voice.error}
+        candidates={voice.candidates}
+        candidatesLoading={voice.candidatesLoading}
+        unsupportedIntent={voice.unsupportedIntent}
         onClose={() => {
           void voice.closeSheet();
         }}
@@ -1145,6 +1207,12 @@ export function CatalogScreen({ navigation, route }: Props) {
           void voice.confirmDraftAndRun();
         }}
         onDraftChange={voice.setDraftTranscript}
+        onSelectCandidate={(candidate) => {
+          void voice.selectCandidateAndRun(candidate);
+        }}
+        onOpenOrders={() => {
+          void voice.openOrdersFallback();
+        }}
         colors={themeColors}
         isDark={isDark}
       />

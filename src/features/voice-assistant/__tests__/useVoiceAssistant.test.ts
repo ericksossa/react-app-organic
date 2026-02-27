@@ -27,7 +27,7 @@ describe('useVoiceAssistant', () => {
   it('flujo startListening -> stopListening -> success', async () => {
     const onSearchProducts = jest.fn();
     const { client, stt } = createMockClient({
-      isListening: jest.fn(() => true),
+      isListening: jest.fn().mockReturnValueOnce(false).mockReturnValue(true),
       stop: jest.fn(async () => ({ transcript: 'busca tomate organico' }))
     });
 
