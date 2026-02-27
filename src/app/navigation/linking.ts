@@ -22,6 +22,11 @@ export const linking: LinkingOptions<RootStackParamList> = {
                   ProductDetail: 'p/:slug'
                 }
               },
+              VoiceTab: {
+                screens: {
+                  VoiceMain: 'voice'
+                }
+              },
               CartTab: {
                 screens: {
                   Checkout: 'checkout'

@@ -25,6 +25,7 @@ jest.mock('./withTabSceneTransition', () => ({
 
 jest.mock('./HomeStackNavigator', () => ({ HomeStackNavigator: () => null }));
 jest.mock('./CatalogStackNavigator', () => ({ CatalogStackNavigator: () => null }));
+jest.mock('./VoiceStackNavigator', () => ({ VoiceStackNavigator: () => null }));
 jest.mock('./CartStackNavigator', () => ({ CartStackNavigator: () => null }));
 
 jest.mock('@react-navigation/bottom-tabs', () => ({
@@ -68,11 +69,12 @@ describe('MainTabs', () => {
     expect(navigatorProps.screenOptions.headerShown).toBe(false);
     expect(navigatorProps.screenOptions.tabBarShowLabel).toBe(false);
     expect(navigatorProps.screenOptions.tabBarStyle.height).toBe(80);
-    expect(screenCalls.map((s) => s.name)).toEqual(['HomeTab', 'CatalogTab', 'CartTab']);
+    expect(screenCalls.map((s) => s.name)).toEqual(['HomeTab', 'CatalogTab', 'VoiceTab', 'CartTab']);
 
     const labels = iconRenderProps.map((props) => props.label);
     expect(labels).toContain('Inicio');
     expect(labels).toContain('Cosecha');
+    expect(labels).toContain('Voz');
     expect(labels).toContain('Canasta');
   });
 
