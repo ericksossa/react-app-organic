@@ -1,17 +1,17 @@
-# Auditoría implementación actual (Voice Assistant)
+# Auditoría implementación previa (Voice Assistant)
 
 ## Alcance auditado
-- UI y navegación: `/Users/erick/.codex/worktrees/9255/rn-app/src/features/voice/screens/VoiceAssistantScreen.tsx`, `/Users/erick/.codex/worktrees/9255/rn-app/src/features/voice/components/PremiumVoiceAssistant.tsx`, `/Users/erick/.codex/worktrees/9255/rn-app/src/features/catalog/screens/CatalogScreen.tsx`, `/Users/erick/.codex/worktrees/9255/rn-app/src/features/home/screens/HomeScreen.tsx`, `/Users/erick/.codex/worktrees/9255/rn-app/src/app/navigation/MainTabs.tsx`, `/Users/erick/.codex/worktrees/9255/rn-app/src/app/navigation/VoiceStackNavigator.tsx`.
+- UI y navegación: `/Users/erick/.codex/worktrees/9255/rn-app/src/features/voice/screens/VoiceAssistantScreen.tsx`, `/Users/erick/.codex/worktrees/9255/rn-app/src/features/catalog/screens/CatalogScreen.tsx`, `/Users/erick/.codex/worktrees/9255/rn-app/src/features/home/screens/HomeScreen.tsx`, `/Users/erick/.codex/worktrees/9255/rn-app/src/app/navigation/MainTabs.tsx`, `/Users/erick/.codex/worktrees/9255/rn-app/src/app/navigation/VoiceStackNavigator.tsx`.
 - Catálogo/búsqueda/carrito: `/Users/erick/.codex/worktrees/9255/rn-app/src/services/api/catalogApi.ts`, `/Users/erick/.codex/worktrees/9255/rn-app/src/state/cartStore.ts`.
 - Configuración runtime: `metro.config.js`, `assets/*.pv|*.ppn|*.rhn`, `app.config.ts`, `ios/Info.plist`.
 
 ## Cómo funciona hoy
 1. Existe un tab independiente `VoiceTab` que renderiza `VoiceAssistantScreen`.
-2. `VoiceAssistantScreen`:
+2. `VoiceAssistantScreen` (estado previo):
    - carga assets Picovoice con `expo-asset` (`cheetah_params_es.pv`, `coffee_maker_ios.rhn`, `porcupine_params_es.pv`, `hola_mercado.ppn`),
    - resuelve AccessKey/env,
-   - monta `PremiumVoiceAssistant`.
-3. `PremiumVoiceAssistant` concentra toda la lógica:
+   - montaba un único componente de voz.
+3. El componente único de voz concentraba toda la lógica:
    - UI (FAB + modal + estados),
    - carga dinámica de SDK Picovoice,
    - permisos micrófono,
@@ -28,7 +28,7 @@
 ## Limitaciones identificadas
 
 ### Arquitectura
-- Alto acoplamiento: UI + dominio + infraestructura + side-effects en un solo archivo (`PremiumVoiceAssistant.tsx` > 2k líneas).
+- Alto acoplamiento: UI + dominio + infraestructura + side-effects en un solo archivo de voz (> 2k líneas).
 - Difícil de testear: parser/estado/acciones no están aislados.
 - Reutilización baja: no hay servicio reusable para SearchBar (solo modal/tab voz).
 
