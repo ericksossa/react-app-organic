@@ -203,8 +203,10 @@ export function VoiceOrbScreen({
   const showUnsupported = Boolean(voice.unsupportedIntent);
   const showError = voice.status === 'error' && Boolean(voice.error);
   const showOpenOrders = voice.unsupportedIntent === 'REPEAT_LAST_ORDER' || voice.unsupportedIntent === 'TRACK_ORDER';
+  const liveSubtitle =
+    voice.status === 'listening' || voice.status === 'processing' ? voice.transcript.trim() : '';
   const copyTitle = voice.status === 'listening' ? 'Te escucho...' : 'Toca para hablar';
-  const copySubtitle = 'Busca tomate.';
+  const copySubtitle = liveSubtitle;
   const auroraState = voice.status === 'listening' ? 'listening' : voice.status === 'processing' ? 'processing' : 'idle';
 
   return (

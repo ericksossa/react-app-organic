@@ -101,7 +101,13 @@ function TabGlyph({
   }
 
   if (icon === 'voice') {
-    return <Feather name={focused ? 'mic' : 'mic-off'} color={color} size={size} />;
+    return (
+      <Ionicons
+        name={focused ? 'moon' : 'moon-outline'}
+        color={color}
+        size={size}
+      />
+    );
   }
 
   return (

@@ -9,7 +9,7 @@ type VoiceHeaderProps = {
   onProfilePress?: () => void;
 };
 
-export function VoiceHeader({ title = 'Análisis de voz', onBackPress, onProfilePress }: VoiceHeaderProps) {
+export function VoiceHeader({ title = 'Luna Verde', onBackPress, onProfilePress }: VoiceHeaderProps) {
   const { isDark } = useTheme();
 
   return (

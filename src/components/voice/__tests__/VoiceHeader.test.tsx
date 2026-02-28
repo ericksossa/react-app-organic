@@ -21,11 +21,11 @@ describe('VoiceHeader', () => {
 
   it('muestra título en español por defecto', () => {
     const { getByText } = render(<VoiceHeader />);
-    expect(getByText('Análisis de voz')).toBeTruthy();
+    expect(getByText('Luna Verde')).toBeTruthy();
   });
 
   it('usa texto blanco en modo dark', () => {
     const { getByText } = render(<VoiceHeader />);
-    expect(getByText('Análisis de voz')).toHaveStyle({ color: '#FFFFFF' });
+    expect(getByText('Luna Verde')).toHaveStyle({ color: '#FFFFFF' });
   });
 });

@@ -148,6 +148,7 @@ export function useVoiceAssistant({
 }: UseVoiceAssistantArgs) {
   const [status, setStatus] = React.useState<VoiceAssistantStatus>('idle');
   const [transcript, setTranscript] = React.useState('');
+  const transcriptRef = React.useRef('');
   const [error, setError] = React.useState<string | null>(null);
   const [parsedIntent, setParsedIntent] = React.useState<ParsedIntent | null>(null);
   const [sheetVisible, setSheetVisible] = React.useState(false);
@@ -173,6 +174,11 @@ export function useVoiceAssistant({
   }, []);
 
   const isFlowActive = React.useCallback((flowId: number) => flowId === flowIdRef.current, []);
+
+  const setLiveTranscript = React.useCallback((value: string) => {
+    transcriptRef.current = value;
+    setTranscript(value);
+  }, []);
 
   const resolveTopCandidates = React.useCallback(
     async (intent: ParsedIntent): Promise<VoiceCandidate[]> => {
@@ -229,7 +235,7 @@ export function useVoiceAssistant({
     const flowId = newFlowId();
     setSheetVisible(true);
     setError(null);
-    setTranscript('');
+    setLiveTranscript('');
     setParsedIntent(null);
     setUnsupportedIntent(null);
     dispatchDisambiguation({ type: 'RESET' });
@@ -238,7 +244,7 @@ export function useVoiceAssistant({
 
     const started = await client.startListening((partial) => {
       if (!isFlowActive(flowId)) return;
-      setTranscript(partial);
+      setLiveTranscript(partial);
     });
 
     if (!isFlowActive(flowId)) return;
@@ -264,7 +270,7 @@ export function useVoiceAssistant({
     timeoutRef.current = setTimeout(() => {
       void cancelListening('timeout');
     }, timeoutMs);
-  }, [clearTimeoutRef, client, isFlowActive, newFlowId, timeoutMs, tracker]);
+  }, [clearTimeoutRef, client, isFlowActive, newFlowId, setLiveTranscript, timeoutMs, tracker]);
 
   const setReviewState = React.useCallback((intent: ParsedIntent, draft: string, candidates: VoiceCandidate[]) => {
     setParsedIntent(intent);
@@ -285,12 +291,12 @@ export function useVoiceAssistant({
       const result = await client.stopListening({ rhinoFirst });
       if (!isFlowActive(flowId)) return;
 
-      const finalTranscript = (result.transcript || transcript).trim();
+      const finalTranscript = (result.transcript || transcriptRef.current).trim();
       const parsed = applyRhinoHint(parseIntent(finalTranscript), result.rhinoHint);
       const latencyMs = Date.now() - startTsRef.current;
       const confidenceBreakdown = scoreConfidence(parsed, screenContext);
 
-      setTranscript(finalTranscript);
+      setLiveTranscript(finalTranscript);
       setParsedIntent(parsed);
       setUnsupportedIntent(null);
 
@@ -368,7 +374,7 @@ export function useVoiceAssistant({
     screenContext,
     setReviewState,
     tracker,
-    transcript
+    setLiveTranscript
   ]);
 
   const confirmDraftAndRun = React.useCallback(async () => {
@@ -400,7 +406,7 @@ export function useVoiceAssistant({
         return;
       }
 
-      setTranscript(finalText);
+      setLiveTranscript(finalText);
       setStatus('success');
       triggerFeedback('success');
     } catch {
@@ -408,7 +414,7 @@ export function useVoiceAssistant({
       triggerFeedback('error');
       setError('No pudimos ejecutar la acción por voz en este momento.');
     }
-  }, [disambiguation.draft, executeIntent, resolveTopCandidates, screenContext, setReviewState, tracker]);
+  }, [disambiguation.draft, executeIntent, resolveTopCandidates, screenContext, setLiveTranscript, setReviewState, tracker]);
 
   const selectCandidateAndRun = React.useCallback(
     async (candidate: VoiceCandidate) => {
@@ -429,7 +435,7 @@ export function useVoiceAssistant({
           return;
         }
 
-        setTranscript(sourceText);
+        setLiveTranscript(sourceText);
         setStatus('success');
         triggerFeedback('success');
       } catch {
@@ -438,7 +444,7 @@ export function useVoiceAssistant({
         triggerFeedback('error');
       }
     },
-    [disambiguation.draft, executeIntent, parsedIntent, tracker, transcript]
+    [disambiguation.draft, executeIntent, parsedIntent, setLiveTranscript, tracker, transcript]
   );
 
   const cancelListening = React.useCallback(

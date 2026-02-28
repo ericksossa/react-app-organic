@@ -95,7 +95,7 @@ export function MainTabs() {
           tabBarIcon: ({ focused }) => (
             <AnimatedTabIcon
               focused={focused}
-              label="Voz"
+              label="Luna Verde"
               icon="voice"
               activeColor={activeTone}
               inactiveColor={inactiveTone}
