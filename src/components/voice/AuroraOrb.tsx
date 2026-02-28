@@ -1,5 +1,5 @@
 import React from 'react';
-import { Image, StyleSheet, View } from 'react-native';
+import { Image, Platform, StyleSheet, View } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import Animated, {
   Easing,
@@ -21,7 +21,7 @@ type AuroraOrbProps = {
 };
 
 const ORB_VIDEO = require('../../../assets/videos/voice-efecto.mp4');
-const ORB_COVER = require('../../../assets/images/voice-efecto-cover.jpg');
+const ORB_COVER = require('../../../assets/images/luna.png');
 
 export const AuroraOrb = React.memo(function AuroraOrb({ state, size = 230, energy }: AuroraOrbProps) {
   const breath = useSharedValue(0);
@@ -116,6 +116,7 @@ export const AuroraOrb = React.memo(function AuroraOrb({ state, size = 230, ener
   });
 
   const coverOpacity = state === 'listening' ? 0.08 : state === 'processing' ? 0.14 : 0.28;
+  const showCover = state === 'idle';
 
   return (
     <View style={[styles.root, { width: size, height: size }]}>
@@ -129,15 +130,19 @@ export const AuroraOrb = React.memo(function AuroraOrb({ state, size = 230, ener
       />
 
       <Animated.View style={[styles.shell, { width: size, height: size, borderRadius: size / 2 }, shellStyle]}>
-        <Image source={ORB_COVER} style={styles.coverImage} resizeMode="cover" />
-        <VideoView
-          player={player}
-          style={styles.video}
-          contentFit="cover"
-          nativeControls={false}
-          fullscreenOptions={{ enable: false }}
-          allowsPictureInPicture={false}
-        />
+        {showCover ? <Image source={ORB_COVER} style={styles.coverImage} resizeMode="cover" /> : null}
+        <View style={styles.videoViewport}>
+          <VideoView
+            player={player}
+            style={styles.video}
+            contentFit="cover"
+            nativeControls={false}
+            fullscreenOptions={{ enable: false }}
+            allowsPictureInPicture={false}
+            surfaceType={Platform.OS === 'android' ? 'textureView' : undefined}
+            useExoShutter={false}
+          />
+        </View>
         <View style={[styles.coverTint, { opacity: coverOpacity }]} />
         <View style={styles.whiteVeil} />
         <Animated.View pointerEvents="none" style={[styles.neonRingOuter, neonRingStyle]} />
@@ -171,7 +176,13 @@ const styles = StyleSheet.create({
     elevation: 8
   },
   video: {
-    ...StyleSheet.absoluteFillObject
+    ...StyleSheet.absoluteFillObject,
+    transform: [{ scale: 1.2 }]
+  },
+  videoViewport: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 9999,
+    overflow: 'hidden'
   },
   coverImage: {
     ...StyleSheet.absoluteFillObject
@@ -186,16 +197,20 @@ const styles = StyleSheet.create({
   },
   neonRingOuter: {
     ...StyleSheet.absoluteFillObject,
-    borderWidth: 1.2,
-    borderColor: 'rgba(132,248,236,0.72)'
+    top: 6,
+    left: 6,
+    right: 6,
+    bottom: 6,
+    borderWidth: 0.9,
+    borderColor: 'rgba(132,248,236,0.46)'
   },
   neonRingInner: {
     ...StyleSheet.absoluteFillObject,
-    top: 10,
-    left: 10,
-    right: 10,
-    bottom: 10,
-    borderWidth: 0.8,
-    borderColor: 'rgba(186,255,248,0.34)'
+    top: 18,
+    left: 18,
+    right: 18,
+    bottom: 18,
+    borderWidth: 0.6,
+    borderColor: 'rgba(186,255,248,0.22)'
   }
 });
