@@ -77,14 +77,15 @@ export function VoiceAssistantDock({
 
   const voiceClient = React.useMemo(() => {
     if (!enabled) return null;
-    if (!accessKey || !cheetahModelPath || !rhinoContextPath) return null;
+    if (!accessKey || !cheetahModelPath) return null;
 
     const stt = new PicovoiceSttProvider({
       accessKey,
       cheetahModelPath,
       rhinoContextPath,
       rhinoModelPath,
-      endpointDurationSec: 1.1,
+      disableRhino: true,
+      endpointDurationSec: 0.55,
       organicTerms: ['aguacate hass', 'tomates organicos', 'lechuga', 'finca', 'sin quimicos']
     });
 

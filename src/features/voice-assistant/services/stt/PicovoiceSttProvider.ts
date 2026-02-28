@@ -40,7 +40,7 @@ type PicovoiceModules = {
       options?: { endpointDuration?: number; enableAutomaticPunctuation?: boolean; device?: string }
     ) => Promise<CheetahInstance>;
   };
-  Rhino: {
+  Rhino?: {
     create: (accessKey: string, contextPath: string, modelPath?: string) => Promise<RhinoInstance>;
   };
   VoiceProcessor: {
@@ -51,10 +51,11 @@ type PicovoiceModules = {
 export type PicovoiceSttConfig = {
   accessKey: string;
   cheetahModelPath: string;
-  rhinoContextPath: string;
+  rhinoContextPath?: string;
   rhinoModelPath?: string;
   endpointDurationSec?: number;
   organicTerms?: string[];
+  disableRhino?: boolean;
 };
 
 function normalizeFsPath(path?: string): string | undefined {
@@ -103,7 +104,7 @@ async function loadModules(): Promise<PicovoiceModules> {
   const VoiceProcessor =
     voiceProcessorPkg?.VoiceProcessor ?? voiceProcessorPkg?.default?.VoiceProcessor ?? voiceProcessorPkg?.default;
 
-  if (!Cheetah || !Rhino || !VoiceProcessor?.instance) {
+  if (!Cheetah || !VoiceProcessor?.instance) {
     throw new Error('SDK de voz no disponible en runtime.');
   }
 
@@ -126,9 +127,22 @@ export class PicovoiceSttProvider implements SttProvider {
   private startOptions: SttStartOptions = {};
   private busy = false;
   private listening = false;
+  private frameCount = 0;
+  private partialCount = 0;
+  private sessionStartedAt = 0;
+  private startRetryCount = 0;
 
   constructor(config: PicovoiceSttConfig) {
     this.config = config;
+  }
+
+  private debugLog(message: string, payload?: Record<string, unknown>) {
+    if (!__DEV__) return;
+    if (payload) {
+      console.debug('[voice-debug][stt]', message, payload);
+      return;
+    }
+    console.debug('[voice-debug][stt]', message);
   }
 
   private async waitForIdle(maxWaitMs = 1200): Promise<void> {
@@ -138,23 +152,75 @@ export class PicovoiceSttProvider implements SttProvider {
     }
   }
 
+  private async waitForFrames(maxWaitMs = 700): Promise<boolean> {
+    const started = Date.now();
+    while (Date.now() - started < maxWaitMs) {
+      if (this.frameCount > 0) return true;
+      await new Promise<void>((resolve) => setTimeout(resolve, 25));
+    }
+    return this.frameCount > 0;
+  }
+
+  private async createCheetahWithFallback(
+    accessKey: string,
+    candidates: string[],
+    endpointDuration: number
+  ): Promise<CheetahInstance> {
+    let lastError: unknown;
+    for (const path of candidates) {
+      try {
+        this.debugLog('cheetah_create_attempt', { path });
+        const instance = await this.modules!.Cheetah.create(accessKey, path, {
+          endpointDuration,
+          enableAutomaticPunctuation: true
+        });
+        this.debugLog('cheetah_create_ok', { path });
+        return instance;
+      } catch (error) {
+        lastError = error;
+        this.debugLog('cheetah_create_fail', {
+          path,
+          message: error instanceof Error ? error.message : String(error)
+        });
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error('No se pudo inicializar Cheetah.');
+  }
+
   async start(options?: SttStartOptions): Promise<void> {
     this.startOptions = options ?? {};
     await this.ensureReady();
 
     if (this.listening) return;
     const vp = this.modules?.VoiceProcessor.instance;
-    if (!vp || !this.cheetah || !this.rhino) throw new Error('Motores de voz no inicializados.');
+    if (!vp || !this.cheetah) throw new Error('Motor de transcripción no inicializado.');
 
     // Defensive reset in case a previous session left processing state stuck.
     this.busy = false;
     this.partialTranscript = '';
     this.latestInference = null;
+    this.frameCount = 0;
+    this.partialCount = 0;
+    this.sessionStartedAt = Date.now();
+    this.startRetryCount = 0;
+    this.debugLog('start', {
+      disableRhino: Boolean(this.config.disableRhino),
+      hasRhino: Boolean(this.rhino),
+      sampleRate: this.cheetah.sampleRate,
+      frameLength: this.cheetah.frameLength
+    });
 
-    if (this.rhino.reset) await this.rhino.reset();
+    if (this.rhino?.reset) await this.rhino.reset();
 
     this.frameListener = (frame: number[]) => {
-      if (this.busy || !this.cheetah || !this.rhino) return;
+      if (this.busy || !this.cheetah) return;
+      this.frameCount += 1;
+      if (this.frameCount <= 5 || this.frameCount % 25 === 0) {
+        this.debugLog('frame', {
+          count: this.frameCount,
+          size: frame.length
+        });
+      }
 
       this.busy = true;
       void (async () => {
@@ -173,12 +239,21 @@ export class PicovoiceSttProvider implements SttProvider {
               [this.partialTranscript, chunkText].filter(Boolean).join(' '),
               terms
             );
+            this.partialCount += 1;
+            this.debugLog('partial', {
+              count: this.partialCount,
+              chunkLen: chunkText.trim().length,
+              transcriptLen: this.partialTranscript.length,
+              transcriptPreview: this.partialTranscript.slice(-80)
+            });
             this.startOptions.onPartial?.(this.partialTranscript);
           }
 
-          const inference = await this.rhino!.process(frame);
-          if (inference?.isFinalized) {
-            this.latestInference = inference;
+          if (this.rhino) {
+            const inference = await this.rhino.process(frame);
+            if (inference?.isFinalized) {
+              this.latestInference = inference;
+            }
           }
         } catch {
           // Ignore per-frame failures to keep stream alive.
@@ -188,16 +263,27 @@ export class PicovoiceSttProvider implements SttProvider {
       })();
     };
 
-    const recording = await vp.isRecording?.();
-    if (recording) await vp.stop();
-
     vp.addFrameListener(this.frameListener);
-    await vp.start(this.cheetah.frameLength ?? this.rhino.frameLength, this.cheetah.sampleRate ?? this.rhino.sampleRate);
+    await vp.start(this.cheetah.frameLength, this.cheetah.sampleRate);
     this.listening = true;
+    this.debugLog('recording_started');
+
+    const gotFrames = await this.waitForFrames();
+    if (!gotFrames && this.listening && this.startRetryCount < 1) {
+      this.startRetryCount += 1;
+      this.debugLog('startup_no_frames_retry', { retry: this.startRetryCount });
+      try {
+        await vp.stop();
+      } catch {
+        // Ignore stop errors in retry path.
+      }
+      await vp.start(this.cheetah.frameLength, this.cheetah.sampleRate);
+      this.debugLog('recording_restarted');
+    }
   }
 
   async stop(): Promise<SttResult> {
-    if (!this.modules || !this.cheetah || !this.rhino) {
+    if (!this.modules || !this.cheetah) {
       return { transcript: '' };
     }
 
@@ -212,6 +298,11 @@ export class PicovoiceSttProvider implements SttProvider {
       this.frameListener = null;
       await this.waitForIdle();
       this.busy = false;
+      this.debugLog('recording_stopped', {
+        durationMs: Date.now() - this.sessionStartedAt,
+        frames: this.frameCount,
+        partials: this.partialCount
+      });
     }
 
     const flushResult = await this.cheetah.flush();
@@ -226,6 +317,20 @@ export class PicovoiceSttProvider implements SttProvider {
       [this.partialTranscript, flushText].filter(Boolean).join(' '),
       this.config.organicTerms ?? []
     );
+    if (this.frameCount === 0) {
+      this.debugLog('no_audio_frames', {
+        durationMs: Date.now() - this.sessionStartedAt
+      });
+    }
+    this.debugLog('flush', {
+      flushLen: flushText.trim().length,
+      partialLen: this.partialTranscript.length,
+      transcriptLen: transcript.length,
+      transcriptPreview: transcript.slice(-100),
+      rhinoFinalized: Boolean(this.latestInference?.isFinalized),
+      rhinoUnderstood: Boolean(this.latestInference?.isUnderstood),
+      rhinoIntent: this.latestInference?.intent
+    });
 
     return {
       transcript,
@@ -252,6 +357,11 @@ export class PicovoiceSttProvider implements SttProvider {
     this.busy = false;
     this.partialTranscript = '';
     this.latestInference = null;
+    this.debugLog('cancelled', {
+      durationMs: this.sessionStartedAt ? Date.now() - this.sessionStartedAt : 0,
+      frames: this.frameCount,
+      partials: this.partialCount
+    });
   }
 
   isListening(): boolean {
@@ -276,24 +386,28 @@ export class PicovoiceSttProvider implements SttProvider {
   }
 
   private async ensureReady(): Promise<void> {
-    if (this.modules && this.cheetah && this.rhino) return;
+    if (this.modules && this.cheetah && (this.config.disableRhino || this.rhino)) return;
 
     const accessKey = this.config.accessKey.trim();
     const cheetahModelPath = normalizeFsPath(this.config.cheetahModelPath);
     const rhinoContextPath = normalizeFsPath(this.config.rhinoContextPath);
     const rhinoModelPath = normalizeFsPath(this.config.rhinoModelPath);
+    const rawCheetahPath = this.config.cheetahModelPath;
 
-    if (!accessKey || !cheetahModelPath || !rhinoContextPath) {
-      throw new Error('Faltan AccessKey/modelos para voz.');
+    if (!accessKey || !cheetahModelPath) {
+      throw new Error('Faltan AccessKey/modelos para transcripción por voz.');
     }
 
     this.modules = await loadModules();
 
-    this.cheetah = await this.modules.Cheetah.create(accessKey, cheetahModelPath, {
-      endpointDuration: this.config.endpointDurationSec ?? 1,
-      enableAutomaticPunctuation: true
-    });
+    const cheetahCandidates = Array.from(new Set([cheetahModelPath, rawCheetahPath].filter(Boolean)));
+    this.cheetah = await this.createCheetahWithFallback(accessKey, cheetahCandidates as string[], this.config.endpointDurationSec ?? 1);
 
-    this.rhino = await this.modules.Rhino.create(accessKey, rhinoContextPath, rhinoModelPath);
+    const useRhino = !this.config.disableRhino && Boolean(rhinoContextPath) && Boolean(this.modules.Rhino);
+    if (useRhino) {
+      this.rhino = await this.modules.Rhino!.create(accessKey, rhinoContextPath!, rhinoModelPath);
+    } else {
+      this.rhino = null;
+    }
   }
 }

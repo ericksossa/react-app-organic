@@ -39,7 +39,11 @@ export class VoiceClient {
 
       await this.stt.start({ onPartial });
       return { ok: true };
-    } catch {
+    } catch (error) {
+      if (__DEV__) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.debug('[voice-debug][client] startListening_error', { message });
+      }
       return { ok: false, reason: 'init_error' };
     } finally {
       this.startInFlight = false;

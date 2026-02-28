@@ -146,6 +146,15 @@ export function useVoiceAssistant({
   rhinoFirst = false,
   resolveCandidates
 }: UseVoiceAssistantArgs) {
+  const debugLog = React.useCallback((message: string, payload?: Record<string, unknown>) => {
+    if (!__DEV__) return;
+    if (payload) {
+      console.debug('[voice-debug][state]', message, payload);
+      return;
+    }
+    console.debug('[voice-debug][state]', message);
+  }, []);
+
   const [status, setStatus] = React.useState<VoiceAssistantStatus>('idle');
   const [transcript, setTranscript] = React.useState('');
   const transcriptRef = React.useRef('');
@@ -232,6 +241,11 @@ export function useVoiceAssistant({
   );
 
   const beginListening = React.useCallback(async () => {
+    if (status === 'listening' || status === 'processing') {
+      debugLog('begin_skipped', { status });
+      return;
+    }
+
     const flowId = newFlowId();
     setSheetVisible(true);
     setError(null);
@@ -241,9 +255,11 @@ export function useVoiceAssistant({
     dispatchDisambiguation({ type: 'RESET' });
 
     tracker('voice_permission_prompted', buildSafeVoicePayload({}));
+    debugLog('begin_listening');
 
     const started = await client.startListening((partial) => {
       if (!isFlowActive(flowId)) return;
+      debugLog('on_partial', { len: partial.length, preview: partial.slice(-80) });
       setLiveTranscript(partial);
     });
 
@@ -252,10 +268,12 @@ export function useVoiceAssistant({
     if (started.ok === false) {
       if (started.reason === 'permission_denied') {
         setStatus('permission_denied');
+        debugLog('start_denied');
         tracker('voice_permission_denied', buildSafeVoicePayload({ reason: 'denied' }));
       } else {
         setStatus('error');
         setError('No pudimos iniciar el audio. Intenta nuevamente.');
+        debugLog('start_error_init');
         tracker('voice_failed', buildSafeVoicePayload({ success: false, reason: 'init_error' }));
       }
       return;
@@ -263,6 +281,7 @@ export function useVoiceAssistant({
 
     startTsRef.current = Date.now();
     setStatus('listening');
+    debugLog('listening_started');
     triggerFeedback('start');
     tracker('voice_listen_started', buildSafeVoicePayload({}));
 
@@ -270,7 +289,7 @@ export function useVoiceAssistant({
     timeoutRef.current = setTimeout(() => {
       void cancelListening('timeout');
     }, timeoutMs);
-  }, [clearTimeoutRef, client, isFlowActive, newFlowId, setLiveTranscript, timeoutMs, tracker]);
+  }, [clearTimeoutRef, client, debugLog, isFlowActive, newFlowId, setLiveTranscript, status, timeoutMs, tracker]);
 
   const setReviewState = React.useCallback((intent: ParsedIntent, draft: string, candidates: VoiceCandidate[]) => {
     setParsedIntent(intent);
@@ -292,9 +311,15 @@ export function useVoiceAssistant({
       if (!isFlowActive(flowId)) return;
 
       const finalTranscript = (result.transcript || transcriptRef.current).trim();
+      debugLog('stop_result', {
+        resultLen: (result.transcript ?? '').length,
+        refLen: transcriptRef.current.length,
+        finalLen: finalTranscript.length
+      });
       if (!finalTranscript) {
         setStatus('error');
         setError('No detecté voz. Intenta hablar más cerca del micrófono y vuelve a intentar.');
+        debugLog('empty_transcript');
         tracker('voice_failed', buildSafeVoicePayload({ success: false, reason: 'empty_transcript' }));
         return;
       }
@@ -380,6 +405,7 @@ export function useVoiceAssistant({
     rhinoFirst,
     screenContext,
     setReviewState,
+    debugLog,
     tracker,
     setLiveTranscript
   ]);
@@ -508,7 +534,8 @@ export function useVoiceAssistant({
 
   React.useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state !== 'active') {
+      // iOS permission prompts can temporarily move app to 'inactive'; avoid cancelling capture there.
+      if (state === 'background' && client.isListening()) {
         void cancelListening('user_cancel');
       }
     });
