@@ -20,7 +20,7 @@ type AuroraOrbProps = {
   energy?: SharedValue<number>;
 };
 
-const ORB_VIDEO = require('../../../assets/videos/voice-efecto.mp4');
+const ORB_VIDEO = require('../../../assets/videos/greenluna.mp4');
 const ORB_COVER = require('../../../assets/images/luna.png');
 
 export const AuroraOrb = React.memo(function AuroraOrb({ state, size = 230, energy }: AuroraOrbProps) {
@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
   },
   video: {
     ...StyleSheet.absoluteFillObject,
-    transform: [{ scale: 1.2 }]
+    transform: [{ scale: 1.32 }]
   },
   videoViewport: {
     ...StyleSheet.absoluteFillObject,
