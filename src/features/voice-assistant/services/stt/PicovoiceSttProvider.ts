@@ -131,6 +131,13 @@ export class PicovoiceSttProvider implements SttProvider {
     this.config = config;
   }
 
+  private async waitForIdle(maxWaitMs = 1200): Promise<void> {
+    const started = Date.now();
+    while (this.busy && Date.now() - started < maxWaitMs) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 20));
+    }
+  }
+
   async start(options?: SttStartOptions): Promise<void> {
     this.startOptions = options ?? {};
     await this.ensureReady();
@@ -173,6 +180,8 @@ export class PicovoiceSttProvider implements SttProvider {
           if (inference?.isFinalized) {
             this.latestInference = inference;
           }
+        } catch {
+          // Ignore per-frame failures to keep stream alive.
         } finally {
           this.busy = false;
         }
@@ -201,6 +210,7 @@ export class PicovoiceSttProvider implements SttProvider {
       }
       this.listening = false;
       this.frameListener = null;
+      await this.waitForIdle();
       this.busy = false;
     }
 

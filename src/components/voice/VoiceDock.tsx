@@ -15,11 +15,10 @@ type VoiceDockProps = {
   status: VoiceAssistantStatus;
   disabled: boolean;
   onPause: () => void;
-  onMicPressIn: () => void;
-  onMicPressOut: () => void;
+  onMicPress: () => void;
 };
 
-export function VoiceDock({ status, disabled, onPause, onMicPressIn, onMicPressOut }: VoiceDockProps) {
+export function VoiceDock({ status, disabled, onPause, onMicPress }: VoiceDockProps) {
   const micScale = useSharedValue(1);
   const ringPulse = useSharedValue(1);
   const ringOpacity = useSharedValue(0.2);
@@ -59,14 +58,13 @@ export function VoiceDock({ status, disabled, onPause, onMicPressIn, onMicPressO
         <Animated.View style={micAnimated}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Mantén presionado para hablar"
+            accessibilityLabel={status === 'listening' ? 'Detener escucha' : 'Iniciar escucha'}
             onPressIn={() => {
               micScale.value = withTiming(0.96, { duration: 100 });
-              onMicPressIn();
+              onMicPress();
             }}
             onPressOut={() => {
               micScale.value = withTiming(1, { duration: 120 });
-              onMicPressOut();
             }}
             disabled={disabled}
             style={[styles.micButton, disabled && styles.micDisabled]}

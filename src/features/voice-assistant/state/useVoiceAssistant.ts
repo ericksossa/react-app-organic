@@ -292,6 +292,13 @@ export function useVoiceAssistant({
       if (!isFlowActive(flowId)) return;
 
       const finalTranscript = (result.transcript || transcriptRef.current).trim();
+      if (!finalTranscript) {
+        setStatus('error');
+        setError('No detecté voz. Intenta hablar más cerca del micrófono y vuelve a intentar.');
+        tracker('voice_failed', buildSafeVoicePayload({ success: false, reason: 'empty_transcript' }));
+        return;
+      }
+
       const parsed = applyRhinoHint(parseIntent(finalTranscript), result.rhinoHint);
       const latencyMs = Date.now() - startTsRef.current;
       const confidenceBreakdown = scoreConfidence(parsed, screenContext);

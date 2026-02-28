@@ -303,13 +303,18 @@ export function VoiceOrbScreen({
               status={voice.status}
               disabled={disabled}
               onPause={() => {
+                if (voice.status === 'listening') {
+                  void voice.stopListeningAndProcess();
+                  return;
+                }
                 void voice.cancelListening();
               }}
-              onMicPressIn={() => {
+              onMicPress={() => {
+                if (voice.status === 'listening') {
+                  void voice.stopListeningAndProcess();
+                  return;
+                }
                 void voice.beginListening();
-              }}
-              onMicPressOut={() => {
-                void voice.stopListeningAndProcess();
               }}
             />
           </View>
