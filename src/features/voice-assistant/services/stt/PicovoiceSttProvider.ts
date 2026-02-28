@@ -26,6 +26,8 @@ type RhinoInstance = {
 type VoiceProcessorInstance = {
   addFrameListener: (listener: (frame: number[]) => void) => void;
   removeFrameListener: (listener: (frame: number[]) => void) => void;
+  addErrorListener?: (listener: (error: unknown) => void) => void;
+  removeErrorListener?: (listener: (error: unknown) => void) => void;
   start: (frameLength: number, sampleRate: number) => Promise<void>;
   stop: () => Promise<void>;
   isRecording?: () => Promise<boolean>;
@@ -122,8 +124,10 @@ export class PicovoiceSttProvider implements SttProvider {
   private cheetah: CheetahInstance | null = null;
   private rhino: RhinoInstance | null = null;
   private frameListener: ((frame: number[]) => void) | null = null;
+  private errorListener: ((error: unknown) => void) | null = null;
   private partialTranscript = '';
   private latestInference: RhinoInference | null = null;
+  private lastVoiceProcessorError: string | null = null;
   private startOptions: SttStartOptions = {};
   private busy = false;
   private listening = false;
@@ -194,11 +198,17 @@ export class PicovoiceSttProvider implements SttProvider {
     if (this.listening) return;
     const vp = this.modules?.VoiceProcessor.instance;
     if (!vp || !this.cheetah) throw new Error('Motor de transcripción no inicializado.');
+    const hasPermission = (await vp.hasRecordAudioPermission?.()) ?? true;
+    this.debugLog('permission_before_start', { hasPermission });
+    if (!hasPermission) {
+      throw new Error('record_audio_permission_denied');
+    }
 
     // Defensive reset in case a previous session left processing state stuck.
     this.busy = false;
     this.partialTranscript = '';
     this.latestInference = null;
+    this.lastVoiceProcessorError = null;
     this.frameCount = 0;
     this.partialCount = 0;
     this.sessionStartedAt = Date.now();
@@ -211,6 +221,17 @@ export class PicovoiceSttProvider implements SttProvider {
     });
 
     if (this.rhino?.reset) await this.rhino.reset();
+    this.errorListener = (error: unknown) => {
+      const message =
+        typeof error === 'string'
+          ? error
+          : error instanceof Error
+            ? error.message
+            : String(error);
+      this.lastVoiceProcessorError = message;
+      this.debugLog('voice_processor_error', { message });
+    };
+    vp.addErrorListener?.(this.errorListener);
 
     this.frameListener = (frame: number[]) => {
       if (this.busy || !this.cheetah) return;
@@ -266,7 +287,9 @@ export class PicovoiceSttProvider implements SttProvider {
     vp.addFrameListener(this.frameListener);
     await vp.start(this.cheetah.frameLength, this.cheetah.sampleRate);
     this.listening = true;
-    this.debugLog('recording_started');
+    this.debugLog('recording_started', {
+      isRecording: (await vp.isRecording?.()) ?? null
+    });
 
     const gotFrames = await this.waitForFrames();
     if (!gotFrames && this.listening && this.startRetryCount < 1) {
@@ -278,7 +301,9 @@ export class PicovoiceSttProvider implements SttProvider {
         // Ignore stop errors in retry path.
       }
       await vp.start(this.cheetah.frameLength, this.cheetah.sampleRate);
-      this.debugLog('recording_restarted');
+      this.debugLog('recording_restarted', {
+        isRecording: (await vp.isRecording?.()) ?? null
+      });
     }
   }
 
@@ -293,9 +318,11 @@ export class PicovoiceSttProvider implements SttProvider {
         await vp.stop();
       } finally {
         if (this.frameListener) vp.removeFrameListener(this.frameListener);
+        if (this.errorListener) vp.removeErrorListener?.(this.errorListener);
       }
       this.listening = false;
       this.frameListener = null;
+      this.errorListener = null;
       await this.waitForIdle();
       this.busy = false;
       this.debugLog('recording_stopped', {
@@ -319,7 +346,8 @@ export class PicovoiceSttProvider implements SttProvider {
     );
     if (this.frameCount === 0) {
       this.debugLog('no_audio_frames', {
-        durationMs: Date.now() - this.sessionStartedAt
+        durationMs: Date.now() - this.sessionStartedAt,
+        voiceProcessorError: this.lastVoiceProcessorError
       });
     }
     this.debugLog('flush', {
@@ -327,6 +355,7 @@ export class PicovoiceSttProvider implements SttProvider {
       partialLen: this.partialTranscript.length,
       transcriptLen: transcript.length,
       transcriptPreview: transcript.slice(-100),
+      voiceProcessorError: this.lastVoiceProcessorError,
       rhinoFinalized: Boolean(this.latestInference?.isFinalized),
       rhinoUnderstood: Boolean(this.latestInference?.isUnderstood),
       rhinoIntent: this.latestInference?.intent
@@ -334,6 +363,8 @@ export class PicovoiceSttProvider implements SttProvider {
 
     return {
       transcript,
+      noFrames: this.frameCount === 0,
+      noFramesReason: this.lastVoiceProcessorError ?? undefined,
       finalRhinoIntent: this.latestInference?.intent,
       finalRhinoUnderstood: this.latestInference?.isUnderstood,
       finalRhinoSlots: this.latestInference?.slots ?? {}
@@ -349,11 +380,13 @@ export class PicovoiceSttProvider implements SttProvider {
         await vp.stop();
       } finally {
         if (this.frameListener) vp.removeFrameListener(this.frameListener);
+        if (this.errorListener) vp.removeErrorListener?.(this.errorListener);
       }
       this.listening = false;
     }
 
     this.frameListener = null;
+    this.errorListener = null;
     this.busy = false;
     this.partialTranscript = '';
     this.latestInference = null;

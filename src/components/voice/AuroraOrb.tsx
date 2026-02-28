@@ -1,6 +1,5 @@
 import React from 'react';
-import { Image, Platform, StyleSheet, View } from 'react-native';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { Image, StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
   cancelAnimation,
@@ -20,7 +19,6 @@ type AuroraOrbProps = {
   energy?: SharedValue<number>;
 };
 
-const ORB_VIDEO = require('../../../assets/videos/greenluna.mp4');
 const ORB_COVER = require('../../../assets/images/luna.png');
 
 export const AuroraOrb = React.memo(function AuroraOrb({ state, size = 230, energy }: AuroraOrbProps) {
@@ -28,15 +26,6 @@ export const AuroraOrb = React.memo(function AuroraOrb({ state, size = 230, ener
   const pulse = useSharedValue(0);
   const speakingMix = useSharedValue(state === 'listening' ? 1 : 0);
   const processingMix = useSharedValue(state === 'processing' ? 1 : 0);
-
-  const player = useVideoPlayer(ORB_VIDEO, (instance) => {
-    instance.loop = true;
-    instance.muted = true;
-    instance.playbackRate = 0.92;
-    instance.pause();
-  });
-
-  React.useEffect(() => () => player.pause(), [player]);
 
   React.useEffect(() => {
     breath.value = withRepeat(
@@ -63,24 +52,7 @@ export const AuroraOrb = React.memo(function AuroraOrb({ state, size = 230, ener
       true
     );
 
-    if (state === 'listening') {
-      player.loop = true;
-      player.playbackRate = 1.08;
-      player.play();
-      return;
-    }
-
-    if (state === 'processing') {
-      player.loop = true;
-      player.playbackRate = 0.86;
-      player.play();
-      return;
-    }
-
-    player.playbackRate = 0.92;
-    player.pause();
-    player.currentTime = 0;
-  }, [player, processingMix, pulse, speakingMix, state]);
+  }, [processingMix, pulse, speakingMix, state]);
 
   const shellStyle = useAnimatedStyle(() => {
     const baseBreath = interpolate(breath.value, [0, 1], [0.993, 1.007]);
@@ -116,7 +88,6 @@ export const AuroraOrb = React.memo(function AuroraOrb({ state, size = 230, ener
   });
 
   const coverOpacity = state === 'listening' ? 0.08 : state === 'processing' ? 0.14 : 0.28;
-  const showCover = state === 'idle';
 
   return (
     <View style={[styles.root, { width: size, height: size }]}>
@@ -130,19 +101,7 @@ export const AuroraOrb = React.memo(function AuroraOrb({ state, size = 230, ener
       />
 
       <Animated.View style={[styles.shell, { width: size, height: size, borderRadius: size / 2 }, shellStyle]}>
-        {showCover ? <Image source={ORB_COVER} style={styles.coverImage} resizeMode="cover" /> : null}
-        <View style={styles.videoViewport}>
-          <VideoView
-            player={player}
-            style={styles.video}
-            contentFit="cover"
-            nativeControls={false}
-            fullscreenOptions={{ enable: false }}
-            allowsPictureInPicture={false}
-            surfaceType={Platform.OS === 'android' ? 'textureView' : undefined}
-            useExoShutter={false}
-          />
-        </View>
+        <Image source={ORB_COVER} style={styles.coverImage} resizeMode="cover" />
         <View style={[styles.coverTint, { opacity: coverOpacity }]} />
         <View style={styles.whiteVeil} />
         <Animated.View pointerEvents="none" style={[styles.neonRingOuter, neonRingStyle]} />
@@ -174,15 +133,6 @@ const styles = StyleSheet.create({
     shadowRadius: 22,
     shadowOffset: { width: 0, height: 10 },
     elevation: 8
-  },
-  video: {
-    ...StyleSheet.absoluteFillObject,
-    transform: [{ scale: 1.32 }]
-  },
-  videoViewport: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 9999,
-    overflow: 'hidden'
   },
   coverImage: {
     ...StyleSheet.absoluteFillObject

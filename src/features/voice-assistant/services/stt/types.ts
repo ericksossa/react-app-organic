@@ -4,6 +4,8 @@ export type SttStartOptions = {
 
 export type SttResult = {
   transcript: string;
+  noFrames?: boolean;
+  noFramesReason?: string;
   finalRhinoIntent?: string;
   finalRhinoUnderstood?: boolean;
   finalRhinoSlots?: Record<string, string>;

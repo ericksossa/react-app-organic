@@ -25,3 +25,23 @@ diff --git a/node_modules/@picovoice/react-native-voice-processor/ios/VoiceProce
              }
          }))
  
+@@ -59,6 +61,18 @@ class PvVoiceProcessor: RCTEventEmitter {
+             frameLength: Int,
+             sampleRate: Int,
+             resolver resolve: RCTPromiseResolveBlock,
+             rejecter reject: RCTPromiseRejectBlock) {
++        do {
++            let audioSession = AVAudioSession.sharedInstance()
++            try audioSession.setCategory(
++                    AVAudioSession.Category.playAndRecord,
++                    mode: AVAudioSession.Mode.measurement,
++                    options: [.allowBluetooth, .defaultToSpeaker])
++            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
++        } catch {
++            reject("PV_AUDIO_RECORDER_ERROR", "Unable to configure iOS audio session", error)
++            return
++        }
++
+         do {
+             try voiceProcessor.start(frameLength: UInt32(frameLength), sampleRate: UInt32(sampleRate))
+         } catch {

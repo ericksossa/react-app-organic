@@ -37,6 +37,8 @@ export class VoiceClient {
         return { ok: false, reason: 'permission_denied' };
       }
 
+      // iOS can need a short settle window after permission/session changes.
+      await new Promise<void>((resolve) => setTimeout(resolve, 180));
       await this.stt.start({ onPartial });
       return { ok: true };
     } catch (error) {

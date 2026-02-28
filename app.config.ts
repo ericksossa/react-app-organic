@@ -21,8 +21,8 @@ const config: ExpoConfig = {
 
  android: { package: 'io.organicapp.mobile' },
  extra: {
-    apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:3000/green-cart/v1',
-    picovoiceAccessKey: process.env.PICOVOICE_ACCESS_KEY ?? process.env.EXPO_PUBLIC_PICOVOICE_ACCESS_KEY ?? ''
+    apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? 'https://greencart-api-1029864321739.us-central1.run.app/green-cart/v1',
+    picovoiceAccessKey: process.env.PICOVOICE_ACCESS_KEY ?? process.env.EXPO_PUBLIC_PICOVOICE_ACCESS_KEY ?? 'ULsNVp4KnQD54mcBQxlUQqnvqgleLLc9n/h+d5r2zOOKE86zaru8sw=='
   },
   plugins: [
     'expo-secure-store',

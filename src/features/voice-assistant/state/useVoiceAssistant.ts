@@ -318,9 +318,21 @@ export function useVoiceAssistant({
       });
       if (!finalTranscript) {
         setStatus('error');
-        setError('No detecté voz. Intenta hablar más cerca del micrófono y vuelve a intentar.');
+        if (result.noFrames) {
+          const reason = result.noFramesReason?.trim();
+          setError(
+            reason
+              ? `No recibimos señal del micrófono (${reason}). Revisa permisos y dispositivos de audio en iOS.`
+              : 'No recibimos señal del micrófono. Revisa permisos de micrófono en iOS y vuelve a intentar.'
+          );
+        } else {
+          setError('No detecté voz. Intenta hablar más cerca del micrófono y vuelve a intentar.');
+        }
         debugLog('empty_transcript');
-        tracker('voice_failed', buildSafeVoicePayload({ success: false, reason: 'empty_transcript' }));
+        tracker(
+          'voice_failed',
+          buildSafeVoicePayload({ success: false, reason: result.noFrames ? 'no_audio_frames' : 'empty_transcript' })
+        );
         return;
       }
 
