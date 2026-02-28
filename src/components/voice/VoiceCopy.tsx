@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { useTheme } from '../../shared/theme/useTheme';
 
 type VoiceCopyProps = {
   title?: string;
@@ -7,12 +8,14 @@ type VoiceCopyProps = {
 };
 
 export function VoiceCopy({ title = 'Toca para hablar', subtitle = 'Busca tomate.' }: VoiceCopyProps) {
+  const { isDark } = useTheme();
+
   return (
     <View style={styles.wrap}>
-      <Text style={styles.title} numberOfLines={2}>
+      <Text style={[styles.title, isDark && styles.titleDark]} numberOfLines={2}>
         {title}
       </Text>
-      <Text style={styles.subtitle} numberOfLines={2}>
+      <Text style={[styles.subtitle, isDark && styles.subtitleDark]} numberOfLines={2}>
         {subtitle}
       </Text>
     </View>
@@ -40,5 +43,11 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     fontWeight: '600',
     textAlign: 'center'
+  },
+  titleDark: {
+    color: '#FFFFFF'
+  },
+  subtitleDark: {
+    color: '#FFFFFF'
   }
 });

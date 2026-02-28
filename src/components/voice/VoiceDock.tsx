@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import Animated, {
   Easing,
+  interpolate,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
@@ -43,6 +44,11 @@ export function VoiceDock({ status, disabled, onPause, onMicPressIn, onMicPressO
     opacity: ringOpacity.value
   }));
 
+  const micNeonAnimated = useAnimatedStyle(() => ({
+    transform: [{ scale: interpolate(ringPulse.value, [1, 1.04], [1, 1.025]) }],
+    opacity: interpolate(ringOpacity.value, [0.2, 0.46], [0.34, 0.9])
+  }));
+
   return (
     <View style={styles.row}>
       <Pressable accessibilityRole="button" accessibilityLabel="Pausar escucha" onPress={onPause} style={styles.secondaryButton}>
@@ -65,6 +71,8 @@ export function VoiceDock({ status, disabled, onPause, onMicPressIn, onMicPressO
             disabled={disabled}
             style={[styles.micButton, disabled && styles.micDisabled]}
           >
+            <Animated.View pointerEvents="none" style={[styles.micNeonOuter, micNeonAnimated]} />
+            <Animated.View pointerEvents="none" style={[styles.micNeonInner, micNeonAnimated]} />
             <Feather name={status === 'processing' ? 'loader' : 'mic'} size={31} color="#FFFFFF" />
           </Pressable>
         </Animated.View>
@@ -108,9 +116,9 @@ const styles = StyleSheet.create({
     borderRadius: 45,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 6,
-    borderColor: '#E9A9B6',
-    backgroundColor: 'rgba(233,169,182,0.05)'
+    borderWidth: 0,
+    borderColor: 'transparent',
+    backgroundColor: 'transparent'
   },
   micButton: {
     width: 78,
@@ -119,11 +127,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#2C3240',
-    shadowColor: '#2C3240',
-    shadowOpacity: 0.16,
-    shadowRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(132,248,236,0.46)',
+    shadowColor: '#7af7e7',
+    shadowOpacity: 0.28,
+    shadowRadius: 20,
     shadowOffset: { width: 0, height: 8 },
     elevation: 8
+  },
+  micNeonOuter: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 39,
+    borderWidth: 1.2,
+    borderColor: 'rgba(132,248,236,0.72)'
+  },
+  micNeonInner: {
+    ...StyleSheet.absoluteFillObject,
+    top: 7,
+    left: 7,
+    right: 7,
+    bottom: 7,
+    borderRadius: 32,
+    borderWidth: 0.9,
+    borderColor: 'rgba(186,255,248,0.32)'
   },
   micDisabled: {
     opacity: 0.5

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { useTheme } from '../../shared/theme/useTheme';
 
 type VoiceHeaderProps = {
   title?: string;
@@ -8,14 +9,21 @@ type VoiceHeaderProps = {
   onProfilePress?: () => void;
 };
 
-export function VoiceHeader({ title = 'Voice Analysis', onBackPress, onProfilePress }: VoiceHeaderProps) {
+export function VoiceHeader({ title = 'Análisis de voz', onBackPress, onProfilePress }: VoiceHeaderProps) {
+  const { isDark } = useTheme();
+
   return (
     <View style={styles.row}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Volver" onPress={onBackPress} style={styles.iconButton}>
-        <Feather name="chevron-left" size={20} color="rgba(28,28,30,0.7)" />
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Volver"
+        onPress={onBackPress}
+        style={[styles.iconButton, isDark && styles.iconButtonDark]}
+      >
+        <Feather name="chevron-left" size={20} color={isDark ? '#FFFFFF' : 'rgba(28,28,30,0.7)'} />
       </Pressable>
 
-      <Text numberOfLines={1} style={styles.title}>
+      <Text numberOfLines={1} style={[styles.title, isDark && styles.titleDark]}>
         {title}
       </Text>
 
@@ -23,9 +31,9 @@ export function VoiceHeader({ title = 'Voice Analysis', onBackPress, onProfilePr
         accessibilityRole="button"
         accessibilityLabel="Perfil"
         onPress={onProfilePress}
-        style={styles.iconButton}
+        style={[styles.iconButton, isDark && styles.iconButtonDark]}
       >
-        <Feather name="user" size={19} color="rgba(28,28,30,0.7)" />
+        <Feather name="user" size={19} color={isDark ? '#FFFFFF' : 'rgba(28,28,30,0.7)'} />
       </Pressable>
     </View>
   );
@@ -46,10 +54,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.55)'
   },
+  iconButtonDark: {
+    backgroundColor: 'rgba(224,240,233,0.14)'
+  },
   title: {
     color: 'rgba(28,28,30,0.8)',
     fontSize: 16,
     fontWeight: '600'
+  },
+  titleDark: {
+    color: '#FFFFFF'
   }
 });
-

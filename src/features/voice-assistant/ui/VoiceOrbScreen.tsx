@@ -15,6 +15,7 @@ import { VoiceClient } from '../services/VoiceClient';
 import { PicovoiceSttProvider } from '../services/stt/PicovoiceSttProvider';
 import { NoopTtsService } from '../services/tts/TtsService';
 import { useVoiceAssistant } from '../state/useVoiceAssistant';
+import { useTheme } from '../../../shared/theme/useTheme';
 
 type VoiceOrbScreenProps = {
   accessKey: string;
@@ -34,10 +35,18 @@ function normalizeSearchText(value: string): string {
     .trim();
 }
 
-function statusLabelCopy(status: ReturnType<typeof useVoiceAssistant>['status']): string {
+export function statusLabelCopy(status: ReturnType<typeof useVoiceAssistant>['status']): string {
   switch (status) {
+    case 'listening':
+      return 'Escuchando...';
+    case 'processing':
+      return 'Procesando...';
+    case 'review':
+      return 'Revisa la transcripción';
+    case 'error':
+      return 'Ocurrió un error';
     default:
-      return 'Listening...';
+      return 'Listo para escucharte';
   }
 }
 
@@ -56,6 +65,7 @@ export function VoiceOrbScreen({
   onOpenCatalog,
   onOpenOrders
 }: VoiceOrbScreenProps) {
+  const { isDark } = useTheme();
   const isFocused = useIsFocused();
   const zoneId = useAvailabilityStore((s) => s.selectedZoneId);
   const addItem = useCartStore((s) => s.addItem);
@@ -203,7 +213,7 @@ export function VoiceOrbScreen({
         top={<VoiceHeader />}
         center={
           <View style={styles.centerContent}>
-            <Text numberOfLines={1} style={styles.statusLabel}>
+            <Text numberOfLines={1} style={[styles.statusLabel, isDark && styles.statusLabelDark]}>
               {statusLabelCopy(voice.status)}
             </Text>
 
@@ -219,8 +229,8 @@ export function VoiceOrbScreen({
                   value={voice.draftTranscript}
                   onChangeText={voice.setDraftTranscript}
                   placeholder="Edita lo que entendí"
-                  placeholderTextColor="rgba(28,28,30,0.45)"
-                  style={styles.reviewInput}
+                  placeholderTextColor={isDark ? 'rgba(255,255,255,0.72)' : 'rgba(28,28,30,0.45)'}
+                  style={[styles.reviewInput, isDark && styles.reviewInputDark]}
                   autoCapitalize="sentences"
                   autoCorrect
                 />
@@ -232,12 +242,12 @@ export function VoiceOrbScreen({
                         key={candidate.id}
                         accessibilityRole="button"
                         accessibilityLabel={`Seleccionar ${candidate.name}`}
-                        style={styles.candidatePill}
+                        style={[styles.candidatePill, isDark && styles.candidatePillDark]}
                         onPress={() => {
                           void voice.selectCandidateAndRun(candidate);
                         }}
                       >
-                        <Text numberOfLines={1} style={styles.candidateText}>
+                        <Text numberOfLines={1} style={[styles.candidateText, isDark && styles.candidateTextDark]}>
                           {candidate.name}
                         </Text>
                       </Pressable>
@@ -259,8 +269,10 @@ export function VoiceOrbScreen({
             ) : null}
 
             {showUnsupported ? (
-              <View style={styles.unsupportedBox}>
-                <Text style={styles.unsupportedText}>{unsupportedCopy(voice.unsupportedIntent)}</Text>
+              <View style={[styles.unsupportedBox, isDark && styles.unsupportedBoxDark]}>
+                <Text style={[styles.unsupportedText, isDark && styles.unsupportedTextDark]}>
+                  {unsupportedCopy(voice.unsupportedIntent)}
+                </Text>
                 {showOpenOrders ? (
                   <Pressable
                     accessibilityRole="button"
@@ -277,8 +289,8 @@ export function VoiceOrbScreen({
             ) : null}
 
             {showError ? (
-              <View style={styles.errorBox}>
-                <Text style={styles.errorText}>{voice.error}</Text>
+              <View style={[styles.errorBox, isDark && styles.errorBoxDark]}>
+                <Text style={[styles.errorText, isDark && styles.errorTextDark]}>{voice.error}</Text>
               </View>
             ) : null}
           </View>
@@ -326,6 +338,9 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textAlign: 'center'
   },
+  statusLabelDark: {
+    color: '#FFFFFF'
+  },
   copyWrap: {
     marginTop: 30,
     width: '100%'
@@ -350,6 +365,11 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 15
   },
+  reviewInputDark: {
+    borderColor: 'rgba(220,236,228,0.22)',
+    backgroundColor: 'rgba(8,20,16,0.46)',
+    color: '#FFFFFF'
+  },
   candidatesRow: {
     flexDirection: 'row',
     gap: 8,
@@ -366,10 +386,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(28,28,30,0.12)'
   },
+  candidatePillDark: {
+    backgroundColor: 'rgba(10,24,19,0.44)',
+    borderColor: 'rgba(215,236,225,0.20)'
+  },
   candidateText: {
     color: '#1C1C1E',
     fontSize: 13,
     fontWeight: '500'
+  },
+  candidateTextDark: {
+    color: '#FFFFFF'
   },
   confirmButton: {
     alignSelf: 'center',
@@ -395,11 +422,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10
   },
+  unsupportedBoxDark: {
+    borderColor: 'rgba(207,228,217,0.18)',
+    backgroundColor: 'rgba(10,24,19,0.42)'
+  },
   unsupportedText: {
     color: '#1C1C1E',
     fontSize: 14,
     lineHeight: 19,
     textAlign: 'center'
+  },
+  unsupportedTextDark: {
+    color: '#FFFFFF'
   },
   ordersButton: {
     marginTop: 8,
@@ -424,10 +458,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8
   },
+  errorBoxDark: {
+    backgroundColor: 'rgba(177,67,67,0.24)',
+    borderColor: 'rgba(235,140,140,0.34)'
+  },
   errorText: {
     color: '#7A1E1E',
     textAlign: 'center',
     fontSize: 13,
     lineHeight: 18
+  },
+  errorTextDark: {
+    color: '#FFFFFF'
   }
 });
