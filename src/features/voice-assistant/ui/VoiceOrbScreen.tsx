@@ -70,6 +70,7 @@ export function VoiceOrbScreen({
   const zoneId = useAvailabilityStore((s) => s.selectedZoneId);
   const addItem = useCartStore((s) => s.addItem);
   const wasFocusedRef = React.useRef(isFocused);
+  const [isVoiceStarting, setIsVoiceStarting] = React.useState(false);
 
   const inactiveClient = React.useMemo(
     () =>
@@ -96,7 +97,7 @@ export function VoiceOrbScreen({
       rhinoContextPath,
       rhinoModelPath,
       disableRhino: true,
-      endpointDurationSec: 0.55,
+      endpointDurationSec: 0.45,
       organicTerms: ['aguacate hass', 'tomates organicos', 'lechuga', 'finca', 'sin quimicos']
     });
 
@@ -209,6 +210,22 @@ export function VoiceOrbScreen({
   const copyTitle = voice.status === 'listening' ? 'Te escucho...' : 'Toca para hablar';
   const copySubtitle = liveSubtitle;
   const auroraState = voice.status === 'listening' ? 'listening' : voice.status === 'processing' ? 'processing' : 'idle';
+  const shouldPlayOrbVideo = voice.status === 'idle' && !isVoiceStarting;
+
+  React.useEffect(() => {
+    if (voice.status !== 'idle') {
+      setIsVoiceStarting(false);
+    }
+  }, [voice.status]);
+
+  const beginListeningWithVideoPause = React.useCallback(async () => {
+    setIsVoiceStarting(true);
+    try {
+      await voice.beginListening();
+    } finally {
+      setIsVoiceStarting(false);
+    }
+  }, [voice]);
 
   return (
     <View style={styles.container}>
@@ -220,7 +237,7 @@ export function VoiceOrbScreen({
               {statusLabelCopy(voice.status)}
             </Text>
 
-            <AuroraOrb state={auroraState} size={230} />
+            <AuroraOrb state={auroraState} size={230} withVideo={shouldPlayOrbVideo} />
 
             <View style={styles.copyWrap}>
               <VoiceCopy title={copyTitle} subtitle={copySubtitle} />
@@ -315,7 +332,7 @@ export function VoiceOrbScreen({
                   void voice.stopListeningAndProcess();
                   return;
                 }
-                void voice.beginListening();
+                void beginListeningWithVideoPause();
               }}
             />
           </View>

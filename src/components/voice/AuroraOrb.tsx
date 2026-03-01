@@ -1,5 +1,6 @@
 import React from 'react';
-import { Image, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import Animated, {
   Easing,
   cancelAnimation,
@@ -17,11 +18,38 @@ type AuroraOrbProps = {
   state: AuroraOrbState;
   size?: number;
   energy?: SharedValue<number>;
+  withVideo?: boolean;
 };
 
-const ORB_COVER = require('../../../assets/images/luna.png');
+const ORB_VIDEO_SOURCE = require('../../../assets/videos/lunaverde.mp4');
 
-export const AuroraOrb = React.memo(function AuroraOrb({ state, size = 230, energy }: AuroraOrbProps) {
+const OrbVideoLayer = React.memo(function OrbVideoLayer() {
+  const videoPlayer = useVideoPlayer(ORB_VIDEO_SOURCE, (instance) => {
+    // Keep orb video fully silent.
+    instance.loop = true;
+    instance.muted = true;
+    instance.volume = 0;
+    instance.playbackRate = 1;
+    instance.play();
+  });
+
+  React.useEffect(() => {
+    videoPlayer.play();
+  }, [videoPlayer]);
+
+  return (
+    <VideoView
+      player={videoPlayer}
+      style={styles.videoFill}
+      pointerEvents="none"
+      contentFit="cover"
+      nativeControls={false}
+      allowsPictureInPicture={false}
+    />
+  );
+});
+
+export const AuroraOrb = React.memo(function AuroraOrb({ state, size = 230, energy, withVideo = true }: AuroraOrbProps) {
   const breath = useSharedValue(0);
   const pulse = useSharedValue(0);
   const speakingMix = useSharedValue(state === 'listening' ? 1 : 0);
@@ -51,7 +79,6 @@ export const AuroraOrb = React.memo(function AuroraOrb({ state, size = 230, ener
       -1,
       true
     );
-
   }, [processingMix, pulse, speakingMix, state]);
 
   const shellStyle = useAnimatedStyle(() => {
@@ -80,13 +107,6 @@ export const AuroraOrb = React.memo(function AuroraOrb({ state, size = 230, ener
     };
   });
 
-  const neonRingStyle = useAnimatedStyle(() => {
-    const active = Math.max(speakingMix.value, processingMix.value * 0.8);
-    return {
-      opacity: interpolate(active, [0, 1], [0.44, 1])
-    };
-  });
-
   const coverOpacity = state === 'listening' ? 0.08 : state === 'processing' ? 0.14 : 0.28;
 
   return (
@@ -99,13 +119,10 @@ export const AuroraOrb = React.memo(function AuroraOrb({ state, size = 230, ener
           neonHaloStyle
         ]}
       />
-
       <Animated.View style={[styles.shell, { width: size, height: size, borderRadius: size / 2 }, shellStyle]}>
-        <Image source={ORB_COVER} style={styles.coverImage} resizeMode="cover" />
+        {withVideo ? <OrbVideoLayer /> : null}
         <View style={[styles.coverTint, { opacity: coverOpacity }]} />
         <View style={styles.whiteVeil} />
-        <Animated.View pointerEvents="none" style={[styles.neonRingOuter, neonRingStyle]} />
-        <Animated.View pointerEvents="none" style={[styles.neonRingInner, neonRingStyle]} />
       </Animated.View>
     </View>
   );
@@ -134,7 +151,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     elevation: 8
   },
-  coverImage: {
+  videoFill: {
     ...StyleSheet.absoluteFillObject
   },
   coverTint: {
@@ -144,23 +161,5 @@ const styles = StyleSheet.create({
   whiteVeil: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(255,255,255,0.05)'
-  },
-  neonRingOuter: {
-    ...StyleSheet.absoluteFillObject,
-    top: 6,
-    left: 6,
-    right: 6,
-    bottom: 6,
-    borderWidth: 0.9,
-    borderColor: 'rgba(132,248,236,0.46)'
-  },
-  neonRingInner: {
-    ...StyleSheet.absoluteFillObject,
-    top: 18,
-    left: 18,
-    right: 18,
-    bottom: 18,
-    borderWidth: 0.6,
-    borderColor: 'rgba(186,255,248,0.22)'
   }
 });

@@ -170,6 +170,9 @@ export function useVoiceAssistant({
   const startTsRef = React.useRef<number>(0);
   const timeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const flowIdRef = React.useRef(0);
+  const partialUiTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingPartialRef = React.useRef('');
+  const lastPartialUiEmitRef = React.useRef(0);
 
   const clearTimeoutRef = React.useCallback(() => {
     if (!timeoutRef.current) return;
@@ -256,11 +259,32 @@ export function useVoiceAssistant({
 
     tracker('voice_permission_prompted', buildSafeVoicePayload({}));
     debugLog('begin_listening');
+    pendingPartialRef.current = '';
+    lastPartialUiEmitRef.current = 0;
+    if (partialUiTimerRef.current) {
+      clearTimeout(partialUiTimerRef.current);
+      partialUiTimerRef.current = null;
+    }
 
     const started = await client.startListening((partial) => {
       if (!isFlowActive(flowId)) return;
-      debugLog('on_partial', { len: partial.length, preview: partial.slice(-80) });
-      setLiveTranscript(partial);
+      pendingPartialRef.current = partial;
+      const now = Date.now();
+      const elapsed = now - lastPartialUiEmitRef.current;
+      const emit = () => {
+        lastPartialUiEmitRef.current = Date.now();
+        debugLog('on_partial', { len: pendingPartialRef.current.length, preview: pendingPartialRef.current.slice(-80) });
+        setLiveTranscript(pendingPartialRef.current);
+      };
+      if (elapsed >= 100) {
+        emit();
+        return;
+      }
+      if (partialUiTimerRef.current) return;
+      partialUiTimerRef.current = setTimeout(() => {
+        partialUiTimerRef.current = null;
+        emit();
+      }, 100 - elapsed);
     });
 
     if (!isFlowActive(flowId)) return;
@@ -270,6 +294,13 @@ export function useVoiceAssistant({
         setStatus('permission_denied');
         debugLog('start_denied');
         tracker('voice_permission_denied', buildSafeVoicePayload({ reason: 'denied' }));
+      } else if (started.reason === 'no_input_frames') {
+        setStatus('error');
+        setError(
+          'No recibimos frames de entrada del micrófono (no_input_frames). Revisa ruta de audio (speaker/Bluetooth) y permisos, e intenta de nuevo.'
+        );
+        debugLog('start_error_no_input_frames');
+        tracker('voice_failed', buildSafeVoicePayload({ success: false, reason: 'no_input_frames' }));
       } else {
         setStatus('error');
         setError('No pudimos iniciar el audio. Intenta nuevamente.');
@@ -424,8 +455,13 @@ export function useVoiceAssistant({
 
   const confirmDraftAndRun = React.useCallback(async () => {
     const finalText = disambiguation.draft.trim();
+    if (!finalText) {
+      setStatus('error');
+      setError('La transcripción está vacía. Intenta hablar de nuevo o escribe tu solicitud.');
+      return;
+    }
+
     const parsed = parseIntent(finalText);
-    const confidence = scoreConfidence(parsed, screenContext);
 
     setStatus('processing');
     setParsedIntent(parsed);
@@ -433,20 +469,14 @@ export function useVoiceAssistant({
 
     try {
       const candidates = await resolveTopCandidates(parsed);
-      const ambiguousByCandidates = candidates.length > 1;
-
-      if (parsed.requiresConfirmation || confidence.bucket !== 'high' || ambiguousByCandidates) {
-        setReviewState(parsed, finalText, candidates);
-        return;
-      }
-
+      // "Confirmar" should execute the current draft directly.
       const execution = await executeIntent(parsed, finalText, candidates[0]);
       if (execution === 'unsupported') {
         setUnsupportedIntent(parsed.type);
         setStatus('review');
         tracker(
           'voice_intent_not_supported',
-          buildSafeVoicePayload({ intentType: parsed.type, success: false, confidenceBucket: confidence.bucket })
+          buildSafeVoicePayload({ intentType: parsed.type, success: false, confidenceBucket: 'med' })
         );
         return;
       }
@@ -459,7 +489,7 @@ export function useVoiceAssistant({
       triggerFeedback('error');
       setError('No pudimos ejecutar la acción por voz en este momento.');
     }
-  }, [disambiguation.draft, executeIntent, resolveTopCandidates, screenContext, setLiveTranscript, setReviewState, tracker]);
+  }, [disambiguation.draft, executeIntent, resolveTopCandidates, setLiveTranscript, tracker]);
 
   const selectCandidateAndRun = React.useCallback(
     async (candidate: VoiceCandidate) => {
@@ -496,6 +526,10 @@ export function useVoiceAssistant({
     async (reason: 'user_cancel' | 'timeout' = 'user_cancel') => {
       newFlowId();
       clearTimeoutRef();
+      if (partialUiTimerRef.current) {
+        clearTimeout(partialUiTimerRef.current);
+        partialUiTimerRef.current = null;
+      }
       await client.cancel();
       setStatus('idle');
       tracker('voice_listen_cancelled', buildSafeVoicePayload({ reason }));
@@ -560,6 +594,10 @@ export function useVoiceAssistant({
   React.useEffect(() => {
     return () => {
       clearTimeoutRef();
+      if (partialUiTimerRef.current) {
+        clearTimeout(partialUiTimerRef.current);
+        partialUiTimerRef.current = null;
+      }
       void client.dispose();
     };
   }, [clearTimeoutRef, client]);

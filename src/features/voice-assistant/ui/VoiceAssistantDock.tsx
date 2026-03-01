@@ -85,7 +85,7 @@ export function VoiceAssistantDock({
       rhinoContextPath,
       rhinoModelPath,
       disableRhino: true,
-      endpointDurationSec: 0.55,
+      endpointDurationSec: 0.45,
       organicTerms: ['aguacate hass', 'tomates organicos', 'lechuga', 'finca', 'sin quimicos']
     });
 
