@@ -7,6 +7,8 @@ import { parseIntent } from '../domain/parseIntent';
 import { VoiceClient } from '../services/VoiceClient';
 import { disambiguationReducer, initialDisambiguationState } from './disambiguation';
 
+const PARTIAL_UI_THROTTLE_MS = 150;
+
 function triggerHaptic(kind: 'start' | 'stop' | 'error') {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -273,10 +275,12 @@ export function useVoiceAssistant({
       const elapsed = now - lastPartialUiEmitRef.current;
       const emit = () => {
         lastPartialUiEmitRef.current = Date.now();
-        debugLog('on_partial', { len: pendingPartialRef.current.length, preview: pendingPartialRef.current.slice(-80) });
-        setLiveTranscript(pendingPartialRef.current);
+        const nextPartial = pendingPartialRef.current;
+        if (nextPartial === transcriptRef.current) return;
+        debugLog('on_partial', { len: nextPartial.length, preview: nextPartial.slice(-80) });
+        setLiveTranscript(nextPartial);
       };
-      if (elapsed >= 100) {
+      if (elapsed >= PARTIAL_UI_THROTTLE_MS) {
         emit();
         return;
       }
@@ -284,7 +288,7 @@ export function useVoiceAssistant({
       partialUiTimerRef.current = setTimeout(() => {
         partialUiTimerRef.current = null;
         emit();
-      }, 100 - elapsed);
+      }, PARTIAL_UI_THROTTLE_MS - elapsed);
     });
 
     if (!isFlowActive(flowId)) return;

@@ -9,6 +9,7 @@ export type SttResult = {
   finalRhinoIntent?: string;
   finalRhinoUnderstood?: boolean;
   finalRhinoSlots?: Record<string, string>;
+  debug?: Record<string, unknown>;
 };
 
 export interface SttProvider {

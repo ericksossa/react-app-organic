@@ -20,6 +20,8 @@ export type VoiceStopResult = SttResult & {
 export class VoiceClient {
   private startInFlight = false;
   private readonly shouldConfigureExpoAudioMode = false;
+  private sessionId = 0;
+  private activeSessionId = 0;
 
   constructor(
     private readonly stt: SttProvider,
@@ -89,10 +91,13 @@ export class VoiceClient {
     }
 
     this.startInFlight = true;
+    const localSessionId = ++this.sessionId;
+    this.activeSessionId = localSessionId;
     try {
       this.logRuntimeContext();
       const permitted = await requestMicPermission(this.permissionProbe);
       if (!permitted) {
+        if (this.activeSessionId === localSessionId) this.activeSessionId = 0;
         return { ok: false, reason: 'permission_denied' };
       }
 
@@ -100,9 +105,15 @@ export class VoiceClient {
 
       // Keep startup responsive while allowing brief iOS session settle.
       await new Promise<void>((resolve) => setTimeout(resolve, Platform.OS === 'ios' ? 60 : 20));
-      await this.stt.start({ onPartial });
+      await this.stt.start({
+        onPartial: (partial) => {
+          if (this.activeSessionId !== localSessionId) return;
+          onPartial?.(partial);
+        }
+      });
       return { ok: true };
     } catch (error) {
+      if (this.activeSessionId === localSessionId) this.activeSessionId = 0;
       const message = error instanceof Error ? error.message : String(error);
       if (message.includes('no_input_frames')) {
         return { ok: false, reason: 'no_input_frames' };
@@ -117,8 +128,21 @@ export class VoiceClient {
   }
 
   async stopListening(options?: VoiceStopOptions): Promise<VoiceStopResult> {
+    if (!this.stt.isListening()) {
+      this.startInFlight = false;
+      this.activeSessionId = 0;
+      return {
+        transcript: '',
+        rhinoHint: {
+          used: Boolean(options?.rhinoFirst),
+          success: false
+        }
+      };
+    }
+
     const result = await this.stt.stop();
     this.startInFlight = false;
+    this.activeSessionId = 0;
     const rhinoUsed = Boolean(options?.rhinoFirst);
     const rhinoSuccess = Boolean(options?.rhinoFirst && result.finalRhinoUnderstood && result.finalRhinoIntent);
 
@@ -134,6 +158,7 @@ export class VoiceClient {
   }
 
   async cancel(): Promise<void> {
+    this.activeSessionId = 0;
     await this.stt.cancel();
     this.startInFlight = false;
   }
@@ -151,6 +176,7 @@ export class VoiceClient {
   }
 
   async dispose(): Promise<void> {
+    this.activeSessionId = 0;
     this.startInFlight = false;
     await this.stt.dispose();
     await this.tts.stop();

@@ -66,6 +66,29 @@ type PicovoiceModules = {
   };
 };
 
+const PARTIAL_THROTTLE_MS = 150;
+const UI_PARTIAL_THROTTLE_MS_NATIVE = 150;
+const BATCH_SAMPLES = 4096;
+const MAX_QUEUE_FRAMES = 80;
+const KEEP_LAST_FRAMES = 40;
+const FAST_MODE_QUEUE_THRESHOLD = 50;
+const ENERGY_SILENCE_TIMEOUT_MS = 1500;
+const AUDIO_RESTART_DEBOUNCE_MS = 800;
+const SIGNAL_SAMPLE_EVERY_N_FRAMES = 25;
+const NO_FRAMES_FIRST_WAIT_MS = 700;
+const NO_FRAMES_TOTAL_BUDGET_MS = 2000;
+
+type SessionDebugMetrics = {
+  sessionId: number;
+  framesReceived: number;
+  batchesProcessed: number;
+  queueDrops: number;
+  partialEmits: number;
+  avgBatchProcessMs: number;
+  fastMode: boolean;
+  silentInputSuspected: boolean;
+};
+
 export type PicovoiceSttConfig = {
   accessKey: string;
   cheetahModelPath: string;
@@ -154,6 +177,32 @@ export class PicovoiceSttProvider implements SttProvider {
   private partialCount = 0;
   private sessionStartedAt = 0;
   private startRetryCount = 0;
+  private sessionId = 0;
+  private activeSessionId = 0;
+  private fastMode = false;
+  private latestPartialForUi = '';
+  private partialLastUiEmitMs = 0;
+  private partialEmitTimer: ReturnType<typeof setTimeout> | null = null;
+  private micSilentFramesCount = 0;
+  private firstFrameAt = 0;
+  private lastNonSilentFrameAt = 0;
+  private silentInputSuspected = false;
+  private silentRecoveryAttempted = false;
+  private isRestartingAudio = false;
+  private lastAudioRestartAt = 0;
+  private rhinoTailSamples: number[] = [];
+  private rhinoBatchSupported: boolean | null = null;
+  private debugMetrics: SessionDebugMetrics = {
+    sessionId: 0,
+    framesReceived: 0,
+    batchesProcessed: 0,
+    queueDrops: 0,
+    partialEmits: 0,
+    avgBatchProcessMs: 0,
+    fastMode: false,
+    silentInputSuspected: false
+  };
+
   private readonly nativeBridge: NativeVoiceProcessorBridge | null =
     Platform.OS === 'ios' ? ((NativeModules.PvVoiceProcessor as NativeVoiceProcessorBridge) ?? null) : null;
   private nativeEventEmitter: NativeEventEmitter | null =
@@ -163,8 +212,6 @@ export class PicovoiceSttProvider implements SttProvider {
   private nativeDiagnosticSubscription: { remove: () => void } | null = null;
   private nativeFinalTranscript = '';
   private useNativeIosCheetah = false;
-  private partialLastUiEmitMs = 0;
-  private micSilentFramesCount = 0;
 
   constructor(config: PicovoiceSttConfig) {
     this.config = config;
@@ -179,6 +226,52 @@ export class PicovoiceSttProvider implements SttProvider {
     console.debug('[voice-debug][stt]', message);
   }
 
+  private getQueueSize(): number {
+    return Math.max(0, this.frameQueue.length - this.frameQueueHead);
+  }
+
+  private resetSessionRuntime(sessionId: number) {
+    this.busy = false;
+    this.partialTranscript = '';
+    this.latestInference = null;
+    this.lastVoiceProcessorError = null;
+    this.micSilentFramesCount = 0;
+    this.frameCount = 0;
+    this.partialCount = 0;
+    this.processingLoopActive = false;
+    this.frameQueue = [];
+    this.frameQueueHead = 0;
+    this.sessionStartedAt = Date.now();
+    this.startRetryCount = 0;
+    this.nativeFinalTranscript = '';
+    this.latestPartialForUi = '';
+    this.partialLastUiEmitMs = 0;
+    this.firstFrameAt = 0;
+    this.lastNonSilentFrameAt = 0;
+    this.silentInputSuspected = false;
+    this.silentRecoveryAttempted = false;
+    this.isRestartingAudio = false;
+    this.lastAudioRestartAt = 0;
+    this.fastMode = false;
+    this.rhinoTailSamples = [];
+    this.rhinoBatchSupported = null;
+    if (this.partialEmitTimer) {
+      clearTimeout(this.partialEmitTimer);
+      this.partialEmitTimer = null;
+    }
+
+    this.debugMetrics = {
+      sessionId,
+      framesReceived: 0,
+      batchesProcessed: 0,
+      queueDrops: 0,
+      partialEmits: 0,
+      avgBatchProcessMs: 0,
+      fastMode: false,
+      silentInputSuspected: false
+    };
+  }
+
   private removeNativeTextSubscriptions() {
     this.nativePartialSubscription?.remove();
     this.nativeFinalSubscription?.remove();
@@ -188,7 +281,7 @@ export class PicovoiceSttProvider implements SttProvider {
     this.nativeDiagnosticSubscription = null;
   }
 
-  private setupNativeTextSubscriptions() {
+  private setupNativeTextSubscriptions(sessionId: number) {
     if (!this.nativeEventEmitter) return;
     this.removeNativeTextSubscriptions();
 
@@ -197,6 +290,8 @@ export class PicovoiceSttProvider implements SttProvider {
     const diagnosticKey = this.nativeBridge?.DIAGNOSTIC_EMITTER_KEY ?? 'diagnostic';
 
     this.nativePartialSubscription = this.nativeEventEmitter.addListener(partialKey, (payload: unknown) => {
+      if (sessionId !== this.activeSessionId || !this.listening) return;
+
       const text =
         typeof payload === 'string'
           ? payload
@@ -207,21 +302,25 @@ export class PicovoiceSttProvider implements SttProvider {
 
       this.partialTranscript = text;
       const now = Date.now();
-      if (now - this.partialLastUiEmitMs >= 100) {
+      if (now - this.partialLastUiEmitMs >= UI_PARTIAL_THROTTLE_MS_NATIVE) {
         this.partialLastUiEmitMs = now;
         this.startOptions.onPartial?.(this.partialTranscript);
+        this.debugMetrics.partialEmits += 1;
       }
 
-      const obj = (payload as Record<string, unknown>) ?? {};
-      this.debugLog('native_partial', {
-        transcriptLen: text.length,
-        time_to_first_partial_ms: obj.time_to_first_partial_ms,
-        partial_event_rate: obj.partial_event_rate,
-        frames_emitted_native: obj.frames_emitted_native
-      });
+      if (!this.fastMode) {
+        const obj = (payload as Record<string, unknown>) ?? {};
+        this.debugLog('native_partial', {
+          transcriptLen: text.length,
+          time_to_first_partial_ms: obj.time_to_first_partial_ms,
+          partial_event_rate: obj.partial_event_rate,
+          frames_emitted_native: obj.frames_emitted_native
+        });
+      }
     });
 
     this.nativeFinalSubscription = this.nativeEventEmitter.addListener(finalKey, (payload: unknown) => {
+      if (sessionId !== this.activeSessionId) return;
       const text =
         typeof payload === 'string'
           ? payload
@@ -240,10 +339,13 @@ export class PicovoiceSttProvider implements SttProvider {
     });
 
     this.nativeDiagnosticSubscription = this.nativeEventEmitter.addListener(diagnosticKey, (payload: unknown) => {
+      if (sessionId !== this.activeSessionId) return;
       const obj = (payload as Record<string, unknown>) ?? {};
       const eventName = String(obj.event ?? '');
       if (!eventName) return;
-      this.debugLog('native_diagnostic', { event: eventName });
+      if (!this.fastMode) {
+        this.debugLog('native_diagnostic', { event: eventName });
+      }
       if (eventName === 'mic_silent_frames') {
         this.lastVoiceProcessorError = 'mic_silent_frames';
         this.micSilentFramesCount += 1;
@@ -258,7 +360,7 @@ export class PicovoiceSttProvider implements SttProvider {
     }
   }
 
-  private async waitForFrames(maxWaitMs = 700): Promise<boolean> {
+  private async waitForFrames(maxWaitMs = NO_FRAMES_FIRST_WAIT_MS): Promise<boolean> {
     const started = Date.now();
     while (Date.now() - started < maxWaitMs) {
       if (this.frameCount > 0) return true;
@@ -307,8 +409,36 @@ export class PicovoiceSttProvider implements SttProvider {
       await this.nativeBridge.restartAudio();
       return;
     }
+    if (!this.cheetah) return;
     await vp.stop();
-    await vp.start(this.cheetah!.frameLength, this.cheetah!.sampleRate);
+    await vp.start(this.cheetah.frameLength, this.cheetah.sampleRate);
+  }
+
+  private async restartAudioWithGuard(
+    vp: VoiceProcessorInstance,
+    sessionId: number,
+    reason: 'startup_no_frames' | 'silent_input'
+  ): Promise<void> {
+    if (sessionId !== this.activeSessionId || !this.listening) return;
+    const now = Date.now();
+    if (this.isRestartingAudio) return;
+    if (now - this.lastAudioRestartAt < AUDIO_RESTART_DEBOUNCE_MS) return;
+
+    this.isRestartingAudio = true;
+    this.lastAudioRestartAt = now;
+    try {
+      this.debugLog('audio_restart', { reason, sessionId, queueSize: this.getQueueSize() });
+      await this.restartNativeAudio(vp);
+      this.debugLog('audio_restart_done', { reason, sessionId });
+    } catch (error) {
+      this.debugLog('audio_restart_error', {
+        reason,
+        sessionId,
+        message: error instanceof Error ? error.message : String(error)
+      });
+    } finally {
+      this.isRestartingAudio = false;
+    }
   }
 
   private async createCheetahWithFallback(
@@ -337,6 +467,226 @@ export class PicovoiceSttProvider implements SttProvider {
     throw lastError instanceof Error ? lastError : new Error('No se pudo inicializar Cheetah.');
   }
 
+  private setFastMode(next: boolean) {
+    if (this.fastMode === next) return;
+    this.fastMode = next;
+    this.debugMetrics.fastMode = next;
+    this.debugLog(next ? 'fastMode_on' : 'fastMode_off', { queueSize: this.getQueueSize() });
+  }
+
+  private compactQueueIfNeeded() {
+    if (this.frameQueueHead > 64 && this.frameQueueHead * 2 >= this.frameQueue.length) {
+      this.frameQueue = this.frameQueue.slice(this.frameQueueHead);
+      this.frameQueueHead = 0;
+    }
+  }
+
+  private sanitizePcmBatch(samples: number[]): number[] {
+    // Cheetah (RN) requires 16-bit integer PCM samples.
+    const normalized = new Array<number>(samples.length);
+    for (let i = 0; i < samples.length; i += 1) {
+      const value = Math.round(samples[i]);
+      normalized[i] = value > 32767 ? 32767 : value < -32768 ? -32768 : value;
+    }
+    return normalized;
+  }
+
+  private schedulePartialEmit(force = false) {
+    if (!this.latestPartialForUi.trim()) return;
+
+    const emit = () => {
+      this.partialEmitTimer = null;
+      this.partialLastUiEmitMs = Date.now();
+      const cleaned = cleanTranscript(this.latestPartialForUi, this.config.organicTerms ?? []);
+      if (!cleaned || cleaned === this.partialTranscript) return;
+      this.partialTranscript = cleaned;
+      this.startOptions.onPartial?.(cleaned);
+      this.debugMetrics.partialEmits += 1;
+      this.partialCount += 1;
+    };
+
+    const now = Date.now();
+    const elapsed = now - this.partialLastUiEmitMs;
+    if (force || elapsed >= PARTIAL_THROTTLE_MS || this.fastMode) {
+      if (this.partialEmitTimer) {
+        clearTimeout(this.partialEmitTimer);
+        this.partialEmitTimer = null;
+      }
+      emit();
+      return;
+    }
+
+    if (this.partialEmitTimer) return;
+    this.partialEmitTimer = setTimeout(() => {
+      emit();
+    }, PARTIAL_THROTTLE_MS - elapsed);
+  }
+
+  private emitLatestPartialBeforeStop() {
+    if (!this.latestPartialForUi.trim()) return;
+    this.schedulePartialEmit(true);
+  }
+
+  private handleSilentInputWatchdog(
+    framePeak: number,
+    vp: VoiceProcessorInstance,
+    sessionId: number
+  ) {
+    const now = Date.now();
+    if (!this.firstFrameAt) {
+      this.firstFrameAt = now;
+      this.debugLog('first_frame_received', { sessionId });
+    }
+
+    if (framePeak > 0) {
+      this.lastNonSilentFrameAt = now;
+      return;
+    }
+
+    if (this.silentRecoveryAttempted) return;
+    if (now - this.firstFrameAt < ENERGY_SILENCE_TIMEOUT_MS) return;
+    if (this.lastNonSilentFrameAt > 0) return;
+
+    this.silentInputSuspected = true;
+    this.silentRecoveryAttempted = true;
+    this.debugMetrics.silentInputSuspected = true;
+    this.debugLog('silent_input_suspected', {
+      sessionId,
+      msSinceFirstFrame: now - this.firstFrameAt,
+      frames: this.frameCount
+    });
+    void this.restartAudioWithGuard(vp, sessionId, 'silent_input');
+  }
+
+  private enqueueFrame(frame: number[], vp: VoiceProcessorInstance, sessionId: number) {
+    if (sessionId !== this.activeSessionId || !this.listening || !this.cheetah) return;
+
+    this.frameCount += 1;
+    this.debugMetrics.framesReceived += 1;
+
+    let framePeak = 0;
+    for (let i = 0; i < frame.length; i += 1) {
+      const abs = Math.abs(frame[i]);
+      if (abs > framePeak) framePeak = abs;
+      if (framePeak > 0) break;
+    }
+
+    if (__DEV__ && !this.fastMode && this.frameCount % SIGNAL_SAMPLE_EVERY_N_FRAMES === 0) {
+      this.debugLog('frame_signal', {
+        frameCount: this.frameCount,
+        framePeak,
+        queueSize: this.getQueueSize()
+      });
+    }
+
+    this.handleSilentInputWatchdog(framePeak, vp, sessionId);
+
+    this.frameQueue.push(frame);
+
+    const queueSize = this.getQueueSize();
+    if (queueSize > MAX_QUEUE_FRAMES) {
+      const keepFrom = Math.max(this.frameQueueHead, this.frameQueue.length - KEEP_LAST_FRAMES);
+      const dropped = keepFrom - this.frameQueueHead;
+      this.frameQueue = this.frameQueue.slice(keepFrom);
+      this.frameQueueHead = 0;
+      this.debugMetrics.queueDrops += dropped;
+      this.debugLog('queue_overflow_drop', {
+        dropped,
+        queueSizeBeforeDrop: queueSize,
+        queueSizeAfterDrop: this.getQueueSize()
+      });
+    }
+
+    this.setFastMode(this.getQueueSize() > FAST_MODE_QUEUE_THRESHOLD);
+
+    if (this.processingLoopActive) return;
+    this.processingLoopActive = true;
+    this.busy = true;
+    void this.drainFrameQueue(sessionId);
+  }
+
+  private takeBatchSamples(): number[] {
+    const batch: number[] = [];
+
+    while (this.frameQueueHead < this.frameQueue.length && batch.length < BATCH_SAMPLES) {
+      const frame = this.frameQueue[this.frameQueueHead++];
+      for (let i = 0; i < frame.length; i += 1) {
+        batch.push(frame[i]);
+      }
+    }
+
+    this.compactQueueIfNeeded();
+    return batch;
+  }
+
+  private async processRhinoBatch(samples: number[]): Promise<void> {
+    if (!this.rhino || samples.length === 0) return;
+
+    for (let i = 0; i < samples.length; i += 1) {
+      this.rhinoTailSamples.push(samples[i]);
+    }
+
+    const frameLength = this.rhino.frameLength;
+    const usableSamples = this.rhinoTailSamples.length - (this.rhinoTailSamples.length % frameLength);
+    if (usableSamples <= 0) return;
+
+    const rhinoChunk = this.rhinoTailSamples.slice(0, usableSamples);
+    this.rhinoTailSamples = this.rhinoTailSamples.slice(usableSamples);
+
+    if (this.rhinoBatchSupported !== false) {
+      try {
+        const inference = await this.rhino.process(rhinoChunk);
+        this.rhinoBatchSupported = true;
+        if (inference?.isFinalized) {
+          this.latestInference = inference;
+        }
+        return;
+      } catch (error) {
+        if (this.rhinoBatchSupported === null) {
+          this.rhinoBatchSupported = false;
+          this.debugLog('rhino_batch_not_supported', {
+            message: error instanceof Error ? error.message : String(error)
+          });
+        } else {
+          throw error;
+        }
+      }
+    }
+
+    for (let offset = 0; offset < rhinoChunk.length; offset += frameLength) {
+      const frame = rhinoChunk.slice(offset, offset + frameLength);
+      const inference = await this.rhino.process(frame);
+      if (inference?.isFinalized) {
+        this.latestInference = inference;
+      }
+    }
+  }
+
+  private async handleCheetahBatch(batch: number[]): Promise<void> {
+    const normalized = this.sanitizePcmBatch(batch);
+    const cheetahChunk = await this.cheetah!.process(normalized);
+    const chunkText =
+      typeof cheetahChunk === 'string'
+        ? cheetahChunk
+        : typeof cheetahChunk?.transcript === 'string'
+          ? cheetahChunk.transcript
+          : '';
+
+    if (chunkText.trim()) {
+      const merged = [this.latestPartialForUi, chunkText].filter(Boolean).join(' ');
+      this.latestPartialForUi = merged;
+      this.schedulePartialEmit(false);
+      if (!this.fastMode) {
+        this.debugLog('partial', {
+          chunkLen: chunkText.trim().length,
+          transcriptLen: this.latestPartialForUi.length
+        });
+      }
+    }
+
+    await this.processRhinoBatch(normalized);
+  }
+
   async start(options?: SttStartOptions): Promise<void> {
     this.startOptions = options ?? {};
     await this.ensureReady();
@@ -351,22 +701,13 @@ export class PicovoiceSttProvider implements SttProvider {
       throw new Error('record_audio_permission_denied');
     }
 
-    // Defensive reset in case a previous session left processing state stuck.
-    this.busy = false;
-    this.partialTranscript = '';
-    this.latestInference = null;
-    this.lastVoiceProcessorError = null;
-    this.micSilentFramesCount = 0;
-    this.frameCount = 0;
-    this.partialCount = 0;
-    this.processingLoopActive = false;
-    this.frameQueue = [];
-    this.frameQueueHead = 0;
-    this.sessionStartedAt = Date.now();
-    this.startRetryCount = 0;
-    this.nativeFinalTranscript = '';
-    this.partialLastUiEmitMs = 0;
+    this.sessionId += 1;
+    const localSessionId = this.sessionId;
+    this.activeSessionId = localSessionId;
+    this.resetSessionRuntime(localSessionId);
+
     this.debugLog('start', {
+      sessionId: localSessionId,
       disableRhino: Boolean(this.config.disableRhino),
       hasRhino: Boolean(this.rhino),
       sampleRate: this.useNativeIosCheetah ? 16000 : this.cheetah?.sampleRate,
@@ -376,6 +717,7 @@ export class PicovoiceSttProvider implements SttProvider {
 
     if (this.rhino?.reset) await this.rhino.reset();
     this.errorListener = (error: unknown) => {
+      if (localSessionId !== this.activeSessionId) return;
       const message =
         typeof error === 'string'
           ? error
@@ -386,17 +728,20 @@ export class PicovoiceSttProvider implements SttProvider {
       if (message.includes('mic_silent_frames')) {
         this.micSilentFramesCount += 1;
       }
-      this.debugLog('voice_processor_error', { message });
+      if (!this.fastMode) {
+        this.debugLog('voice_processor_error', { message, sessionId: localSessionId });
+      }
     };
     vp.addErrorListener?.(this.errorListener);
 
     if (this.useNativeIosCheetah) {
-      this.setupNativeTextSubscriptions();
+      this.setupNativeTextSubscriptions(localSessionId);
       await vp.start(512, 16000);
       this.listening = true;
       const recordingState = (await vp.isRecording?.()) ?? null;
       const nativeDiagnostics = await this.getNativeAudioDiagnostics();
       this.debugLog('recording_started', {
+        sessionId: localSessionId,
         isRecording: recordingState,
         engineRunning: recordingState,
         nativeDiagnostics,
@@ -406,69 +751,53 @@ export class PicovoiceSttProvider implements SttProvider {
     }
 
     this.frameListener = (frame: number[]) => {
-      if (!this.cheetah) return;
-      this.frameCount += 1;
-      if (this.frameCount <= 5 || this.frameCount % 25 === 0) {
-        this.debugLog('frame', {
-          count: this.frameCount,
-          size: frame.length
-        });
-      }
-
-      this.frameQueue.push(frame);
-      if (this.frameQueue.length - this.frameQueueHead > 120) {
-        // Keep bounded memory while still prioritizing recent speech context.
-        const keepFrom = Math.max(this.frameQueueHead, this.frameQueue.length - 120);
-        this.frameQueue = this.frameQueue.slice(keepFrom);
-        this.frameQueueHead = 0;
-      }
-      if (this.processingLoopActive) return;
-
-      this.processingLoopActive = true;
-      this.busy = true;
-      void this.drainFrameQueue();
+      this.enqueueFrame(frame, vp, localSessionId);
     };
 
     vp.addFrameListener(this.frameListener);
-    await vp.start(this.cheetah.frameLength, this.cheetah.sampleRate);
+    await vp.start(this.cheetah!.frameLength, this.cheetah!.sampleRate);
     this.listening = true;
     const recordingState = (await vp.isRecording?.()) ?? null;
     const nativeDiagnostics = await this.getNativeAudioDiagnostics();
     this.debugLog('recording_started', {
+      sessionId: localSessionId,
       isRecording: recordingState,
       engineRunning: recordingState,
       nativeDiagnostics
     });
 
-    const gotFrames = await this.waitForFrames(700);
-    if (gotFrames || !this.listening) return;
+    const gotFrames = await this.waitForFrames(NO_FRAMES_FIRST_WAIT_MS);
+    if (gotFrames || !this.listening || localSessionId !== this.activeSessionId) return;
 
     this.startRetryCount += 1;
     const diagnosticsBeforeRetry = await this.getNativeAudioDiagnostics();
     this.debugLog('startup_no_frames_reinit', {
+      sessionId: localSessionId,
       retry: this.startRetryCount,
       diagnosticsBeforeRetry
     });
 
-    await this.restartNativeAudio(vp);
+    await this.restartAudioWithGuard(vp, localSessionId, 'startup_no_frames');
     const restartedState = (await vp.isRecording?.()) ?? null;
     const diagnosticsAfterRetry = await this.getNativeAudioDiagnostics();
     this.debugLog('recording_restarted', {
+      sessionId: localSessionId,
       isRecording: restartedState,
       engineRunning: restartedState,
       diagnosticsAfterRetry
     });
 
     const elapsedSinceStart = Date.now() - this.sessionStartedAt;
-    const remainingBudgetMs = Math.max(0, 2000 - elapsedSinceStart);
+    const remainingBudgetMs = Math.max(0, NO_FRAMES_TOTAL_BUDGET_MS - elapsedSinceStart);
     const gotFramesAfterRetry = await this.waitForFrames(remainingBudgetMs);
-    if (gotFramesAfterRetry || !this.listening) return;
+    if (gotFramesAfterRetry || !this.listening || localSessionId !== this.activeSessionId) return;
 
     const diagnosticsAtFailure = await this.getNativeAudioDiagnostics();
     const finalEngineRunning = (await vp.isRecording?.()) ?? null;
     const noFramesReason = this.formatNoInputFramesReason(diagnosticsAtFailure, finalEngineRunning);
     this.lastVoiceProcessorError = noFramesReason;
     this.debugLog('startup_no_frames_fail', {
+      sessionId: localSessionId,
       noFramesReason,
       diagnosticsAtFailure,
       engineRunning: finalEngineRunning
@@ -482,6 +811,7 @@ export class PicovoiceSttProvider implements SttProvider {
       this.listening = false;
       this.frameListener = null;
       this.errorListener = null;
+      this.activeSessionId = 0;
     }
 
     throw new Error(noFramesReason);
@@ -492,36 +822,50 @@ export class PicovoiceSttProvider implements SttProvider {
       return { transcript: '' };
     }
 
+    if (!this.listening) {
+      return { transcript: '' };
+    }
+
     const vp = this.modules.VoiceProcessor.instance;
     const isNativeMode = this.useNativeIosCheetah;
-    if (this.listening) {
-      try {
-        await vp.stop();
-      } finally {
-        if (this.frameListener) vp.removeFrameListener(this.frameListener);
-        if (this.errorListener) vp.removeErrorListener?.(this.errorListener);
-      }
-      this.listening = false;
-      this.frameListener = null;
-      this.errorListener = null;
-      // Keep native text subscriptions alive until final_text is received.
-      if (!isNativeMode) {
-        this.removeNativeTextSubscriptions();
-      }
+    const localSessionId = this.activeSessionId;
+
+    try {
+      await vp.stop();
+    } finally {
+      if (this.frameListener) vp.removeFrameListener(this.frameListener);
+      if (this.errorListener) vp.removeErrorListener?.(this.errorListener);
+    }
+    this.listening = false;
+    this.frameListener = null;
+    this.errorListener = null;
+    this.setFastMode(false);
+
+    if (!isNativeMode) {
+      this.removeNativeTextSubscriptions();
       await this.waitForIdle();
       this.busy = false;
-      this.debugLog('recording_stopped', {
-        durationMs: Date.now() - this.sessionStartedAt,
-        frames: this.frameCount,
-        partials: this.partialCount
-      });
     }
+
+    this.debugLog('stop', {
+      sessionId: localSessionId,
+      durationMs: Date.now() - this.sessionStartedAt,
+      frames: this.frameCount,
+      partials: this.partialCount,
+      batches: this.debugMetrics.batchesProcessed
+    });
+
+    this.emitLatestPartialBeforeStop();
 
     if (isNativeMode) {
       await this.waitForNativeFinal(250);
-      const transcript = cleanTranscript((this.nativeFinalTranscript || this.partialTranscript || '').trim(), this.config.organicTerms ?? []);
+      const transcript = cleanTranscript(
+        (this.nativeFinalTranscript || this.partialTranscript || '').trim(),
+        this.config.organicTerms ?? []
+      );
       this.removeNativeTextSubscriptions();
       this.debugLog('flush_native', {
+        sessionId: localSessionId,
         transcriptLen: transcript.length,
         partialLen: this.partialTranscript.length,
         finalLen: this.nativeFinalTranscript.length,
@@ -529,17 +873,20 @@ export class PicovoiceSttProvider implements SttProvider {
         voiceProcessorError: this.lastVoiceProcessorError,
         mic_silent_frames_occurrences: this.micSilentFramesCount
       });
+      this.activeSessionId = 0;
+
       return {
         transcript,
         noFrames: false,
         noFramesReason: this.lastVoiceProcessorError ?? undefined,
         finalRhinoIntent: undefined,
         finalRhinoUnderstood: undefined,
-        finalRhinoSlots: {}
+        finalRhinoSlots: {},
+        debug: __DEV__ ? { ...this.debugMetrics } : undefined
       };
     }
 
-    const flushResult = await this.cheetah.flush();
+    const flushResult = await this.cheetah!.flush();
     const flushText =
       typeof flushResult === 'string'
         ? flushResult
@@ -547,29 +894,32 @@ export class PicovoiceSttProvider implements SttProvider {
           ? flushResult.transcript
           : '';
 
-    const transcript = cleanTranscript(
-      [this.partialTranscript, flushText].filter(Boolean).join(' '),
-      this.config.organicTerms ?? []
-    );
+    const transcript = cleanTranscript([this.latestPartialForUi, flushText].filter(Boolean).join(' '), this.config.organicTerms ?? []);
+
     if (this.frameCount === 0) {
       const nativeDiagnostics = await this.getNativeAudioDiagnostics();
       this.debugLog('no_audio_frames', {
+        sessionId: localSessionId,
         durationMs: Date.now() - this.sessionStartedAt,
         voiceProcessorError: this.lastVoiceProcessorError,
         nativeDiagnostics
       });
     }
+
     this.debugLog('flush', {
+      sessionId: localSessionId,
       flushLen: flushText.trim().length,
-      partialLen: this.partialTranscript.length,
+      partialLen: this.latestPartialForUi.length,
       transcriptLen: transcript.length,
-      transcriptPreview: transcript.slice(-100),
       voiceProcessorError: this.lastVoiceProcessorError,
       mic_silent_frames_occurrences: this.micSilentFramesCount,
       rhinoFinalized: Boolean(this.latestInference?.isFinalized),
       rhinoUnderstood: Boolean(this.latestInference?.isUnderstood),
-      rhinoIntent: this.latestInference?.intent
+      rhinoIntent: this.latestInference?.intent,
+      metrics: this.debugMetrics
     });
+
+    this.activeSessionId = 0;
 
     return {
       transcript,
@@ -577,7 +927,8 @@ export class PicovoiceSttProvider implements SttProvider {
       noFramesReason: this.lastVoiceProcessorError ?? undefined,
       finalRhinoIntent: this.latestInference?.intent,
       finalRhinoUnderstood: this.latestInference?.isUnderstood,
-      finalRhinoSlots: this.latestInference?.slots ?? {}
+      finalRhinoSlots: this.latestInference?.slots ?? {},
+      debug: __DEV__ ? { ...this.debugMetrics } : undefined
     };
   }
 
@@ -595,6 +946,7 @@ export class PicovoiceSttProvider implements SttProvider {
       this.listening = false;
     }
 
+    this.activeSessionId = 0;
     this.frameListener = null;
     this.errorListener = null;
     this.removeNativeTextSubscriptions();
@@ -603,12 +955,18 @@ export class PicovoiceSttProvider implements SttProvider {
     this.frameQueue = [];
     this.frameQueueHead = 0;
     this.partialTranscript = '';
+    this.latestPartialForUi = '';
     this.nativeFinalTranscript = '';
     this.latestInference = null;
+    if (this.partialEmitTimer) {
+      clearTimeout(this.partialEmitTimer);
+      this.partialEmitTimer = null;
+    }
     this.debugLog('cancelled', {
       durationMs: this.sessionStartedAt ? Date.now() - this.sessionStartedAt : 0,
       frames: this.frameCount,
-      partials: this.partialCount
+      partials: this.partialCount,
+      metrics: this.debugMetrics
     });
   }
 
@@ -662,7 +1020,11 @@ export class PicovoiceSttProvider implements SttProvider {
       this.debugLog('native_cheetah_mode_enabled', { sampleRate: 16000, frameLength: 512 });
     } else {
       const cheetahCandidates = Array.from(new Set([cheetahModelPath, rawCheetahPath].filter(Boolean)));
-      this.cheetah = await this.createCheetahWithFallback(accessKey, cheetahCandidates as string[], this.config.endpointDurationSec ?? 1);
+      this.cheetah = await this.createCheetahWithFallback(
+        accessKey,
+        cheetahCandidates as string[],
+        this.config.endpointDurationSec ?? 1
+      );
       this.useNativeIosCheetah = false;
     }
 
@@ -674,79 +1036,42 @@ export class PicovoiceSttProvider implements SttProvider {
     }
   }
 
-  private async drainFrameQueue(): Promise<void> {
+  private async drainFrameQueue(sessionId: number): Promise<void> {
     try {
-      while (this.frameQueue.length > 0 && this.cheetah) {
-        if (this.frameQueueHead >= this.frameQueue.length) break;
-        const frame = this.frameQueue[this.frameQueueHead++];
-        if (this.frameQueueHead > 64 && this.frameQueueHead * 2 >= this.frameQueue.length) {
-          this.frameQueue = this.frameQueue.slice(this.frameQueueHead);
-          this.frameQueueHead = 0;
-        }
-        const pcmFrame = frame;
-        let maxAbsRaw = 0;
-        let meanAbsRaw = 0;
-        if (__DEV__ && (this.frameCount <= 5 || this.frameCount % 100 === 0)) {
-          maxAbsRaw = frame.reduce((acc, sample) => {
-            const abs = Math.abs(sample);
-            return abs > acc ? abs : acc;
-          }, 0);
-          meanAbsRaw = frame.reduce((acc, sample) => acc + Math.abs(sample), 0) / Math.max(1, frame.length);
-          this.debugLog('frame_signal', {
-            frameCount: this.frameCount,
-            maxAbsRaw,
-            meanAbsRaw
-          });
-        }
+      while (this.cheetah && this.listening && sessionId === this.activeSessionId) {
+        const queueSize = this.getQueueSize();
+        if (queueSize <= 0) break;
 
+        const batch = this.takeBatchSamples();
+        if (batch.length === 0) break;
+
+        const startedAt = Date.now();
         try {
-          const cheetahChunk = await this.cheetah.process(pcmFrame);
-          const chunkText =
-            typeof cheetahChunk === 'string'
-              ? cheetahChunk
-              : typeof cheetahChunk?.transcript === 'string'
-                ? cheetahChunk.transcript
-                : '';
-
-          if (chunkText.trim()) {
-            const terms = this.config.organicTerms ?? [];
-            this.partialTranscript = cleanTranscript(
-              [this.partialTranscript, chunkText].filter(Boolean).join(' '),
-              terms
-            );
-            this.partialCount += 1;
-            this.debugLog('partial', {
-              count: this.partialCount,
-              chunkLen: chunkText.trim().length,
-              transcriptLen: this.partialTranscript.length,
-              transcriptPreview: this.partialTranscript.slice(-80)
-            });
-            this.startOptions.onPartial?.(this.partialTranscript);
-          }
-
-          if (this.rhino) {
-            const inference = await this.rhino.process(pcmFrame);
-            if (inference?.isFinalized) {
-              this.latestInference = inference;
-            }
-          }
+          await this.handleCheetahBatch(batch);
+          const batchMs = Date.now() - startedAt;
+          this.debugMetrics.batchesProcessed += 1;
+          const count = this.debugMetrics.batchesProcessed;
+          this.debugMetrics.avgBatchProcessMs =
+            this.debugMetrics.avgBatchProcessMs + (batchMs - this.debugMetrics.avgBatchProcessMs) / count;
         } catch (error) {
-          this.debugLog('frame_process_error', {
-            message: error instanceof Error ? error.message : String(error),
-            frameLen: pcmFrame.length,
-            firstSample: pcmFrame[0],
-            maxAbsRaw,
-            meanAbsRaw
+          this.lastVoiceProcessorError = error instanceof Error ? error.message : String(error);
+          this.debugLog('batch_process_error', {
+            sessionId,
+            batchLen: batch.length,
+            queueSize: this.getQueueSize(),
+            message: this.lastVoiceProcessorError
           });
         }
+
+        this.setFastMode(this.getQueueSize() > FAST_MODE_QUEUE_THRESHOLD);
       }
     } finally {
       this.processingLoopActive = false;
       this.busy = false;
-      if (this.frameQueueHead < this.frameQueue.length && this.cheetah) {
+      if (this.getQueueSize() > 0 && this.cheetah && this.listening && sessionId === this.activeSessionId) {
         this.processingLoopActive = true;
         this.busy = true;
-        void this.drainFrameQueue();
+        void this.drainFrameQueue(sessionId);
       }
     }
   }
