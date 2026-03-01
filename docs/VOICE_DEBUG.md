@@ -15,6 +15,9 @@ Validar latencia, estabilidad y limpieza de sesión en el pipeline de voz (React
 - [ ] Fast mode: al subir backlog aparece `fastMode_on` y al drenar `fastMode_off`.
 - [ ] Stop robusto: `stop()` retorna transcript (aunque vacío), hace flush y limpia listeners.
 - [ ] Cancel robusto: `cancel()` deja estado en idle y sin listeners colgados.
+- [ ] Sample rates consistentes: en logs de `start/flush` revisar `captureSampleRate`, `cheetahSampleRate`, `rhinoSampleRate`.
+- [ ] Si hay mismatch de Rhino, debe aparecer `rhino_sr_mismatch_disabled` y continuar STT-only.
+- [ ] iOS con native cheetah: confirmar `native_cheetah` + `hasRhino=true` cuando Rhino esté habilitado.
 
 ## Prueba iOS (dispositivo físico)
 1. Inicia escucha y habla 10-15 segundos continuos.
@@ -38,3 +41,10 @@ Validar latencia, estabilidad y limpieza de sesión en el pipeline de voz (React
 - Sin errores frecuentes `empty_transcript` por saturación.
 - Menos casos `mic_silent_frames` derivados de overload.
 - Métricas de sesión disponibles en `stop().debug` en `__DEV__`.
+
+## DSP / Audio Session (AEC/NS/AGC)
+- Estado actual: el ajuste de AEC/NS/AGC depende de la capa nativa `PvVoiceProcessor`.
+- El pipeline JS/TS no puede forzar `AVAudioSessionModeVoiceChat` o `AudioRecord` VOICE_COMMUNICATION sin soporte nativo adicional.
+- TODO recomendado:
+  - iOS: exponer en `PvVoiceProcessor` un método para fijar `AVAudioSession` en `voiceChat/videoChat` antes de `start`.
+  - Android: exponer selección de `AudioSource.VOICE_COMMUNICATION` o `VOICE_RECOGNITION` en el bridge.

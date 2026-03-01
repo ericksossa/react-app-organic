@@ -1,10 +1,10 @@
 import React from 'react';
-import { Asset } from 'expo-asset';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { VoiceOrbScreen } from '../../voice-assistant/ui/VoiceOrbScreen';
 import { getPicovoiceAccessKey } from '../../voice-assistant/config/picovoice';
+import { resolveAssetUri } from '../../voice-assistant/services/stt/assetResolver';
 import { useTheme } from '../../../shared/theme/useTheme';
 
 function envValue(key: string): string {
@@ -17,6 +17,7 @@ export function VoiceAssistantScreen() {
   const [bundledAssets, setBundledAssets] = React.useState<{
     cheetahModelPath?: string;
     rhinoContextPath?: string;
+    rhinoModelPath?: string;
   }>({});
   const [assetsReady, setAssetsReady] = React.useState(false);
   const [prewarmToken, setPrewarmToken] = React.useState(0);
@@ -26,25 +27,44 @@ export function VoiceAssistantScreen() {
   const cheetahModelPath =
     envValue('EXPO_PUBLIC_PICOVOICE_CHEETAH_MODEL_PATH') || bundledAssets.cheetahModelPath || '';
   const rhinoContextPath =
-    envValue('EXPO_PUBLIC_PICOVOICE_RHINO_CONTEXT_PATH_ES_CO') || bundledAssets.rhinoContextPath || '';
-  const rhinoModelPath = envValue('EXPO_PUBLIC_PICOVOICE_RHINO_MODEL_PATH');
+    envValue('EXPO_PUBLIC_PICOVOICE_RHINO_CONTEXT_PATH_ES_CO') ||
+    (Platform.OS === 'android' ? envValue('EXPO_PUBLIC_PICOVOICE_RHINO_CONTEXT_PATH_ANDROID') : '') ||
+    bundledAssets.rhinoContextPath ||
+    '';
+  const rhinoModelPath =
+    envValue('EXPO_PUBLIC_PICOVOICE_RHINO_MODEL_PATH_IOS') ||
+    envValue('EXPO_PUBLIC_PICOVOICE_RHINO_MODEL_PATH') ||
+    (Platform.OS === 'android' ? envValue('EXPO_PUBLIC_PICOVOICE_RHINO_MODEL_PATH_ANDROID') : '') ||
+    bundledAssets.rhinoModelPath ||
+    '';
 
   React.useEffect(() => {
     let mounted = true;
 
     const loadBundledVoiceAssets = async () => {
       try {
-        const cheetahAsset = Asset.fromModule(require('../../../../assets/cheetah_params_es.pv'));
-        const rhinoContextAsset = Asset.fromModule(require('../../../../assets/app_V1_es_ios_v4_0_0.rhn'));
-
-        await Promise.all([cheetahAsset.downloadAsync(), rhinoContextAsset.downloadAsync()]);
+        const cheetahModelPathResolved = await resolveAssetUri(require('../../../../assets/cheetah_params_es.pv'));
+        const rhinoContextPathResolved =
+          Platform.OS === 'ios'
+            ? await resolveAssetUri(require('../../../../assets/app_V1_es_ios_v4_0_0.rhn'))
+            : undefined;
+        const rhinoModelPathResolved =
+          Platform.OS === 'ios'
+            ? envValue('EXPO_PUBLIC_PICOVOICE_RHINO_MODEL_PATH_IOS') || envValue('EXPO_PUBLIC_PICOVOICE_RHINO_MODEL_PATH')
+            : undefined;
 
         if (!mounted) return;
 
         setBundledAssets({
-          cheetahModelPath: cheetahAsset.localUri ?? cheetahAsset.uri,
-          rhinoContextPath: rhinoContextAsset.localUri ?? rhinoContextAsset.uri
+          cheetahModelPath: cheetahModelPathResolved,
+          rhinoContextPath: rhinoContextPathResolved,
+          rhinoModelPath: rhinoModelPathResolved || undefined
         });
+        if (__DEV__ && Platform.OS === 'android') {
+          console.debug('[voice-debug][ui] rhino_disabled_android_missing_assets', {
+            hasAndroidContextEnv: Boolean(envValue('EXPO_PUBLIC_PICOVOICE_RHINO_CONTEXT_PATH_ANDROID'))
+          });
+        }
       } catch {
         if (!mounted) return;
         setBundledAssets({});

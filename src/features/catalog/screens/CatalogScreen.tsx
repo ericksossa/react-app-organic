@@ -18,7 +18,6 @@ import { useQuery } from '@tanstack/react-query';
 import { useIsFocused } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Feather } from '@expo/vector-icons';
-import { Asset } from 'expo-asset';
 import { CatalogStackParamList } from '../../../app/navigation/types';
 import { CatalogProduct, getCatalog, getCategories, getProductBySlug } from '../../../services/api/catalogApi';
 import { AppCard } from '../../../shared/ui/AppCard';
@@ -59,6 +58,7 @@ import { NoopTtsService } from '../../voice-assistant/services/tts/TtsService';
 import { buildSafeVoicePayload } from '../../voice-assistant/analytics/voiceEvents';
 import { VoiceCandidate, VoiceIntentType } from '../../voice-assistant/domain/intents';
 import { getPicovoiceAccessKey } from '../../voice-assistant/config/picovoice';
+import { resolveAssetUri } from '../../voice-assistant/services/stt/assetResolver';
 
 type Props = NativeStackScreenProps<CatalogStackParamList, 'CatalogMain'>;
 const ZONE_SHEET_ANIM_MS = 280;
@@ -383,17 +383,25 @@ export function CatalogScreen({ navigation, route }: Props) {
 
     const loadVoiceAssets = async () => {
       try {
-        const cheetahAsset = Asset.fromModule(require('../../../../assets/cheetah_params_es.pv'));
-        const rhinoContextAsset = Asset.fromModule(require('../../../../assets/app_V1_es_ios_v4_0_0.rhn'));
-
-        await Promise.all([cheetahAsset.downloadAsync(), rhinoContextAsset.downloadAsync()]);
+        const cheetahModelPathResolved = await resolveAssetUri(require('../../../../assets/cheetah_params_es.pv'));
+        const rhinoContextPathResolved =
+          Platform.OS === 'ios'
+            ? await resolveAssetUri(require('../../../../assets/app_V1_es_ios_v4_0_0.rhn'))
+            : envValue('EXPO_PUBLIC_PICOVOICE_RHINO_CONTEXT_PATH_ANDROID');
+        const rhinoModelPathResolved =
+          Platform.OS === 'ios'
+            ? envValue('EXPO_PUBLIC_PICOVOICE_RHINO_MODEL_PATH_IOS') || envValue('EXPO_PUBLIC_PICOVOICE_RHINO_MODEL_PATH')
+            : envValue('EXPO_PUBLIC_PICOVOICE_RHINO_MODEL_PATH_ANDROID');
         if (!mounted) return;
 
         setVoiceAssets({
-          cheetahModelPath: cheetahAsset.localUri ?? cheetahAsset.uri,
-          rhinoContextPath: rhinoContextAsset.localUri ?? rhinoContextAsset.uri,
-          rhinoModelPath: undefined
+          cheetahModelPath: cheetahModelPathResolved,
+          rhinoContextPath: rhinoContextPathResolved || undefined,
+          rhinoModelPath: rhinoModelPathResolved || undefined
         });
+        if (__DEV__ && Platform.OS === 'android' && !rhinoContextPathResolved) {
+          console.debug('[voice-debug][catalog] rhino_disabled_android_missing_assets');
+        }
       } catch {
         if (!mounted) return;
         setVoiceAssets({});
@@ -437,9 +445,16 @@ export function CatalogScreen({ navigation, route }: Props) {
   const voiceCheetahModelPath =
     envValue('EXPO_PUBLIC_PICOVOICE_CHEETAH_MODEL_PATH') || voiceAssets.cheetahModelPath || '';
   const voiceRhinoContextPath =
-    envValue('EXPO_PUBLIC_PICOVOICE_RHINO_CONTEXT_PATH_ES_CO') || voiceAssets.rhinoContextPath || '';
-  const voiceRhinoModelPath = envValue('EXPO_PUBLIC_PICOVOICE_RHINO_MODEL_PATH') || voiceAssets.rhinoModelPath;
-  const voiceEnabled = voiceAssetsReady && Boolean(voiceAccessKey && voiceCheetahModelPath && voiceRhinoContextPath);
+    envValue('EXPO_PUBLIC_PICOVOICE_RHINO_CONTEXT_PATH_ES_CO') ||
+    (Platform.OS === 'android' ? envValue('EXPO_PUBLIC_PICOVOICE_RHINO_CONTEXT_PATH_ANDROID') : '') ||
+    voiceAssets.rhinoContextPath ||
+    '';
+  const voiceRhinoModelPath =
+    envValue('EXPO_PUBLIC_PICOVOICE_RHINO_MODEL_PATH_IOS') ||
+    envValue('EXPO_PUBLIC_PICOVOICE_RHINO_MODEL_PATH') ||
+    (Platform.OS === 'android' ? envValue('EXPO_PUBLIC_PICOVOICE_RHINO_MODEL_PATH_ANDROID') : '') ||
+    voiceAssets.rhinoModelPath;
+  const voiceEnabled = voiceAssetsReady && Boolean(voiceAccessKey && voiceCheetahModelPath);
 
   const voiceClient = React.useMemo(() => {
     if (!voiceEnabled) return null;

@@ -1,6 +1,8 @@
 import { NativeEventEmitter, NativeModules, Platform } from 'react-native';
 import { SttProvider, SttResult, SttStartOptions } from './types';
 import { createRhino, releaseRhino, RhinoInference, RhinoInstance } from './rhinoEngine';
+import { AudioRingBufferInt16, toInt16Pcm } from './audioRingBuffer';
+import { evaluateSampleRatePolicy } from './sampleRatePolicy';
 
 type CheetahInstance = {
   process: (pcm: number[]) => Promise<{ transcript?: string; isEndpoint?: boolean } | string>;
@@ -62,7 +64,6 @@ type PicovoiceModules = {
 
 const PARTIAL_THROTTLE_MS = 150;
 const UI_PARTIAL_THROTTLE_MS_NATIVE = 150;
-const BATCH_SAMPLES = 4096;
 const MAX_QUEUE_FRAMES = 80;
 const KEEP_LAST_FRAMES = 40;
 const FAST_MODE_QUEUE_THRESHOLD = 50;
@@ -71,6 +72,7 @@ const AUDIO_RESTART_DEBOUNCE_MS = 800;
 const SIGNAL_SAMPLE_EVERY_N_FRAMES = 25;
 const NO_FRAMES_FIRST_WAIT_MS = 700;
 const NO_FRAMES_TOTAL_BUDGET_MS = 2000;
+const DEFAULT_CAPTURE_FRAME_LENGTH = 512;
 
 type SessionDebugMetrics = {
   sessionId: number;
@@ -81,6 +83,12 @@ type SessionDebugMetrics = {
   avgBatchProcessMs: number;
   fastMode: boolean;
   silentInputSuspected: boolean;
+  captureSampleRate: number;
+  cheetahSampleRate: number;
+  rhinoSampleRate: number;
+  captureVsCheetahMismatch: boolean;
+  rhinoVsCheetahMismatch: boolean;
+  rhinoVsCaptureMismatch: boolean;
 };
 
 export type PicovoiceSttConfig = {
@@ -165,8 +173,8 @@ export class PicovoiceSttProvider implements SttProvider {
   private startOptions: SttStartOptions = {};
   private busy = false;
   private processingLoopActive = false;
-  private frameQueue: number[][] = [];
-  private frameQueueHead = 0;
+  private captureRingBuffer: AudioRingBufferInt16 | null = null;
+  private rhinoRingBuffer: AudioRingBufferInt16 | null = null;
   private listening = false;
   private frameCount = 0;
   private partialCount = 0;
@@ -185,8 +193,14 @@ export class PicovoiceSttProvider implements SttProvider {
   private silentRecoveryAttempted = false;
   private isRestartingAudio = false;
   private lastAudioRestartAt = 0;
-  private rhinoTailSamples: number[] = [];
   private rhinoBatchSupported: boolean | null = null;
+  private captureFrameLength = 0;
+  private captureSampleRate = 0;
+  private cheetahSampleRate = 0;
+  private rhinoSampleRate = 0;
+  private captureVsCheetahMismatch = false;
+  private rhinoVsCheetahMismatch = false;
+  private rhinoVsCaptureMismatch = false;
   private debugMetrics: SessionDebugMetrics = {
     sessionId: 0,
     framesReceived: 0,
@@ -195,7 +209,13 @@ export class PicovoiceSttProvider implements SttProvider {
     partialEmits: 0,
     avgBatchProcessMs: 0,
     fastMode: false,
-    silentInputSuspected: false
+    silentInputSuspected: false,
+    captureSampleRate: 0,
+    cheetahSampleRate: 0,
+    rhinoSampleRate: 0,
+    captureVsCheetahMismatch: false,
+    rhinoVsCheetahMismatch: false,
+    rhinoVsCaptureMismatch: false
   };
 
   private readonly nativeBridge: NativeVoiceProcessorBridge | null =
@@ -222,7 +242,8 @@ export class PicovoiceSttProvider implements SttProvider {
   }
 
   private getQueueSize(): number {
-    return Math.max(0, this.frameQueue.length - this.frameQueueHead);
+    if (!this.captureRingBuffer || this.captureFrameLength <= 0) return 0;
+    return Math.floor(this.captureRingBuffer.getAvailableSamples() / this.captureFrameLength);
   }
 
   private resetSessionRuntime(sessionId: number) {
@@ -234,8 +255,8 @@ export class PicovoiceSttProvider implements SttProvider {
     this.frameCount = 0;
     this.partialCount = 0;
     this.processingLoopActive = false;
-    this.frameQueue = [];
-    this.frameQueueHead = 0;
+    this.captureRingBuffer?.clear();
+    this.rhinoRingBuffer?.clear();
     this.sessionStartedAt = Date.now();
     this.startRetryCount = 0;
     this.nativeFinalTranscript = '';
@@ -248,7 +269,6 @@ export class PicovoiceSttProvider implements SttProvider {
     this.isRestartingAudio = false;
     this.lastAudioRestartAt = 0;
     this.fastMode = false;
-    this.rhinoTailSamples = [];
     this.rhinoBatchSupported = null;
     if (this.partialEmitTimer) {
       clearTimeout(this.partialEmitTimer);
@@ -263,7 +283,13 @@ export class PicovoiceSttProvider implements SttProvider {
       partialEmits: 0,
       avgBatchProcessMs: 0,
       fastMode: false,
-      silentInputSuspected: false
+      silentInputSuspected: false,
+      captureSampleRate: this.captureSampleRate,
+      cheetahSampleRate: this.cheetahSampleRate,
+      rhinoSampleRate: this.rhinoSampleRate,
+      captureVsCheetahMismatch: this.captureVsCheetahMismatch,
+      rhinoVsCheetahMismatch: this.rhinoVsCheetahMismatch,
+      rhinoVsCaptureMismatch: this.rhinoVsCaptureMismatch
     };
   }
 
@@ -404,9 +430,9 @@ export class PicovoiceSttProvider implements SttProvider {
       await this.nativeBridge.restartAudio();
       return;
     }
-    if (!this.cheetah) return;
+    if (!this.captureFrameLength || !this.captureSampleRate) return;
     await vp.stop();
-    await vp.start(this.cheetah.frameLength, this.cheetah.sampleRate);
+    await vp.start(this.captureFrameLength, this.captureSampleRate);
   }
 
   private async restartAudioWithGuard(
@@ -469,21 +495,42 @@ export class PicovoiceSttProvider implements SttProvider {
     this.debugLog(next ? 'fastMode_on' : 'fastMode_off', { queueSize: this.getQueueSize() });
   }
 
-  private compactQueueIfNeeded() {
-    if (this.frameQueueHead > 64 && this.frameQueueHead * 2 >= this.frameQueue.length) {
-      this.frameQueue = this.frameQueue.slice(this.frameQueueHead);
-      this.frameQueueHead = 0;
-    }
+  private configureCaptureBuffers(frameLength: number, sampleRate: number) {
+    const safeFrameLength = Math.max(1, Math.floor(frameLength || DEFAULT_CAPTURE_FRAME_LENGTH));
+    const safeSampleRate = Math.max(1, Math.floor(sampleRate || 16000));
+
+    this.captureFrameLength = safeFrameLength;
+    this.captureSampleRate = safeSampleRate;
+    this.captureRingBuffer = new AudioRingBufferInt16(safeFrameLength * MAX_QUEUE_FRAMES);
+    const rhinoFrameLength = this.rhino?.frameLength ?? safeFrameLength;
+    this.rhinoRingBuffer = new AudioRingBufferInt16(Math.max(rhinoFrameLength * MAX_QUEUE_FRAMES, safeFrameLength * KEEP_LAST_FRAMES));
   }
 
-  private sanitizePcmBatch(samples: number[]): number[] {
-    // Cheetah (RN) requires 16-bit integer PCM samples.
-    const normalized = new Array<number>(samples.length);
-    for (let i = 0; i < samples.length; i += 1) {
-      const value = Math.round(samples[i]);
-      normalized[i] = value > 32767 ? 32767 : value < -32768 ? -32768 : value;
+  private pushFrameToBuffers(frame: number[]): { framePeak: number; droppedFrames: number } {
+    const pcmFrame = toInt16Pcm(frame);
+    let framePeak = 0;
+    for (let i = 0; i < pcmFrame.length; i += 1) {
+      const abs = Math.abs(pcmFrame[i]);
+      if (abs > framePeak) framePeak = abs;
+      if (framePeak > 0) break;
     }
-    return normalized;
+
+    const droppedSamples = this.captureRingBuffer?.push(pcmFrame) ?? 0;
+    if (this.rhino && this.rhinoRingBuffer) {
+      this.rhinoRingBuffer.push(pcmFrame);
+    }
+
+    const droppedFrames = this.captureFrameLength > 0 ? Math.floor(droppedSamples / this.captureFrameLength) : 0;
+    return { framePeak, droppedFrames };
+  }
+
+  private readProcessingFrame(): Int16Array | null {
+    if (!this.captureRingBuffer) return null;
+    if (this.useNativeIosCheetah && !this.cheetah) {
+      const rhinoFrameLength = this.rhino?.frameLength ?? this.captureFrameLength;
+      return this.captureRingBuffer.readFrame(rhinoFrameLength);
+    }
+    return this.captureRingBuffer.readFrame(this.cheetah?.frameLength ?? this.captureFrameLength);
   }
 
   private schedulePartialEmit(force = false) {
@@ -554,17 +601,12 @@ export class PicovoiceSttProvider implements SttProvider {
   }
 
   private enqueueFrame(frame: number[], vp: VoiceProcessorInstance, sessionId: number) {
-    if (sessionId !== this.activeSessionId || !this.listening || !this.cheetah) return;
+    if (sessionId !== this.activeSessionId || !this.listening) return;
+    if (!this.captureRingBuffer) return;
 
     this.frameCount += 1;
     this.debugMetrics.framesReceived += 1;
-
-    let framePeak = 0;
-    for (let i = 0; i < frame.length; i += 1) {
-      const abs = Math.abs(frame[i]);
-      if (abs > framePeak) framePeak = abs;
-      if (framePeak > 0) break;
-    }
+    const { framePeak, droppedFrames } = this.pushFrameToBuffers(frame);
 
     if (__DEV__ && !this.fastMode && this.frameCount % SIGNAL_SAMPLE_EVERY_N_FRAMES === 0) {
       this.debugLog('frame_signal', {
@@ -575,19 +617,11 @@ export class PicovoiceSttProvider implements SttProvider {
     }
 
     this.handleSilentInputWatchdog(framePeak, vp, sessionId);
-
-    this.frameQueue.push(frame);
-
-    const queueSize = this.getQueueSize();
-    if (queueSize > MAX_QUEUE_FRAMES) {
-      const keepFrom = Math.max(this.frameQueueHead, this.frameQueue.length - KEEP_LAST_FRAMES);
-      const dropped = keepFrom - this.frameQueueHead;
-      this.frameQueue = this.frameQueue.slice(keepFrom);
-      this.frameQueueHead = 0;
-      this.debugMetrics.queueDrops += dropped;
+    if (droppedFrames > 0) {
+      this.debugMetrics.queueDrops += droppedFrames;
       this.debugLog('queue_overflow_drop', {
-        dropped,
-        queueSizeBeforeDrop: queueSize,
+        dropped: droppedFrames,
+        queueSizeBeforeDrop: this.getQueueSize() + droppedFrames,
         queueSizeAfterDrop: this.getQueueSize()
       });
     }
@@ -600,41 +634,22 @@ export class PicovoiceSttProvider implements SttProvider {
     void this.drainFrameQueue(sessionId);
   }
 
-  private takeBatchSamples(): number[] {
-    const batch: number[] = [];
-
-    while (this.frameQueueHead < this.frameQueue.length && batch.length < BATCH_SAMPLES) {
-      const frame = this.frameQueue[this.frameQueueHead++];
-      for (let i = 0; i < frame.length; i += 1) {
-        batch.push(frame[i]);
-      }
-    }
-
-    this.compactQueueIfNeeded();
-    return batch;
-  }
-
-  private async processRhinoBatch(samples: number[]): Promise<void> {
-    if (!this.rhino || samples.length === 0) return;
-
-    for (let i = 0; i < samples.length; i += 1) {
-      this.rhinoTailSamples.push(samples[i]);
-    }
-
+  private async processRhinoFromRing(): Promise<void> {
+    if (!this.rhino || !this.rhinoRingBuffer) return;
     const frameLength = this.rhino.frameLength;
-    const usableSamples = this.rhinoTailSamples.length - (this.rhinoTailSamples.length % frameLength);
-    if (usableSamples <= 0) return;
-
-    const rhinoChunk = this.rhinoTailSamples.slice(0, usableSamples);
-    this.rhinoTailSamples = this.rhinoTailSamples.slice(usableSamples);
 
     if (this.rhinoBatchSupported !== false) {
+      const frames = this.rhinoRingBuffer.readFrames(frameLength, 6);
+      if (frames.length === 0) return;
+      const merged = new Int16Array(frames.length * frameLength);
+      for (let i = 0; i < frames.length; i += 1) {
+        merged.set(frames[i], i * frameLength);
+      }
+
       try {
-        const inference = await this.rhino.process(rhinoChunk);
+        const inference = await this.rhino.process(Array.from(merged));
         this.rhinoBatchSupported = true;
-        if (inference?.isFinalized) {
-          this.latestInference = inference;
-        }
+        if (inference?.isFinalized) this.latestInference = inference;
         return;
       } catch (error) {
         if (this.rhinoBatchSupported === null) {
@@ -642,44 +657,47 @@ export class PicovoiceSttProvider implements SttProvider {
           this.debugLog('rhino_batch_not_supported', {
             message: error instanceof Error ? error.message : String(error)
           });
+
+          // Re-feed the same data to preserve timeline before fallback frame-by-frame mode.
+          this.rhinoRingBuffer.push(merged);
         } else {
           throw error;
         }
       }
     }
 
-    for (let offset = 0; offset < rhinoChunk.length; offset += frameLength) {
-      const frame = rhinoChunk.slice(offset, offset + frameLength);
-      const inference = await this.rhino.process(frame);
-      if (inference?.isFinalized) {
-        this.latestInference = inference;
-      }
+    while (true) {
+      const frame = this.rhinoRingBuffer.readFrame(frameLength);
+      if (!frame) break;
+      const inference = await this.rhino.process(Array.from(frame));
+      if (inference?.isFinalized) this.latestInference = inference;
     }
   }
 
-  private async handleCheetahBatch(batch: number[]): Promise<void> {
-    const normalized = this.sanitizePcmBatch(batch);
-    const cheetahChunk = await this.cheetah!.process(normalized);
-    const chunkText =
-      typeof cheetahChunk === 'string'
-        ? cheetahChunk
-        : typeof cheetahChunk?.transcript === 'string'
-          ? cheetahChunk.transcript
-          : '';
+  private async processProcessingFrame(frame: Int16Array): Promise<void> {
+    if (this.cheetah && !this.useNativeIosCheetah) {
+      const cheetahChunk = await this.cheetah.process(Array.from(frame));
+      const chunkText =
+        typeof cheetahChunk === 'string'
+          ? cheetahChunk
+          : typeof cheetahChunk?.transcript === 'string'
+            ? cheetahChunk.transcript
+            : '';
 
-    if (chunkText.trim()) {
-      const merged = [this.latestPartialForUi, chunkText].filter(Boolean).join(' ');
-      this.latestPartialForUi = merged;
-      this.schedulePartialEmit(false);
-      if (!this.fastMode) {
-        this.debugLog('partial', {
-          chunkLen: chunkText.trim().length,
-          transcriptLen: this.latestPartialForUi.length
-        });
+      if (chunkText.trim()) {
+        const merged = [this.latestPartialForUi, chunkText].filter(Boolean).join(' ');
+        this.latestPartialForUi = merged;
+        this.schedulePartialEmit(false);
+        if (!this.fastMode) {
+          this.debugLog('partial', {
+            chunkLen: chunkText.trim().length,
+            transcriptLen: this.latestPartialForUi.length
+          });
+        }
       }
     }
 
-    await this.processRhinoBatch(normalized);
+    await this.processRhinoFromRing();
   }
 
   async start(options?: SttStartOptions): Promise<void> {
@@ -700,14 +718,38 @@ export class PicovoiceSttProvider implements SttProvider {
     const localSessionId = this.sessionId;
     this.activeSessionId = localSessionId;
     this.resetSessionRuntime(localSessionId);
+    const captureFrameLength = this.useNativeIosCheetah
+      ? (this.rhino?.frameLength ?? DEFAULT_CAPTURE_FRAME_LENGTH)
+      : (this.cheetah?.frameLength ?? DEFAULT_CAPTURE_FRAME_LENGTH);
+    const captureSampleRate = this.useNativeIosCheetah ? 16000 : (this.cheetah?.sampleRate ?? 16000);
+    this.configureCaptureBuffers(captureFrameLength, captureSampleRate);
+    const startPolicy = evaluateSampleRatePolicy({
+      captureSampleRate: this.captureSampleRate,
+      cheetahSampleRate: this.cheetahSampleRate || undefined,
+      rhinoSampleRate: this.rhinoSampleRate || undefined
+    });
+    this.captureVsCheetahMismatch = startPolicy.captureVsCheetahMismatch;
+    this.rhinoVsCheetahMismatch = startPolicy.rhinoVsCheetahMismatch;
+    this.rhinoVsCaptureMismatch = startPolicy.rhinoVsCaptureMismatch;
+    this.debugMetrics.captureSampleRate = this.captureSampleRate;
+    this.debugMetrics.cheetahSampleRate = this.cheetahSampleRate;
+    this.debugMetrics.rhinoSampleRate = this.rhinoSampleRate;
+    this.debugMetrics.captureVsCheetahMismatch = this.captureVsCheetahMismatch;
+    this.debugMetrics.rhinoVsCheetahMismatch = this.rhinoVsCheetahMismatch;
+    this.debugMetrics.rhinoVsCaptureMismatch = this.rhinoVsCaptureMismatch;
 
     this.debugLog('start', {
       sessionId: localSessionId,
       disableRhino: Boolean(this.config.disableRhino),
       hasRhino: Boolean(this.rhino),
-      sampleRate: this.useNativeIosCheetah ? 16000 : this.cheetah?.sampleRate,
-      frameLength: this.useNativeIosCheetah ? 512 : this.cheetah?.frameLength,
-      nativeCheetah: this.useNativeIosCheetah
+      sampleRate: this.captureSampleRate,
+      frameLength: this.captureFrameLength,
+      nativeCheetah: this.useNativeIosCheetah,
+      cheetahSampleRate: this.cheetahSampleRate,
+      rhinoSampleRate: this.rhinoSampleRate,
+      captureVsCheetahMismatch: this.captureVsCheetahMismatch,
+      rhinoVsCheetahMismatch: this.rhinoVsCheetahMismatch,
+      rhinoVsCaptureMismatch: this.rhinoVsCaptureMismatch
     });
 
     if (this.rhino?.reset) await this.rhino.reset();
@@ -731,26 +773,17 @@ export class PicovoiceSttProvider implements SttProvider {
 
     if (this.useNativeIosCheetah) {
       this.setupNativeTextSubscriptions(localSessionId);
-      await vp.start(512, 16000);
-      this.listening = true;
-      const recordingState = (await vp.isRecording?.()) ?? null;
-      const nativeDiagnostics = await this.getNativeAudioDiagnostics();
-      this.debugLog('recording_started', {
-        sessionId: localSessionId,
-        isRecording: recordingState,
-        engineRunning: recordingState,
-        nativeDiagnostics,
-        mode: 'native_cheetah'
-      });
-      return;
     }
 
-    this.frameListener = (frame: number[]) => {
-      this.enqueueFrame(frame, vp, localSessionId);
-    };
+    const shouldAttachFrameListener = Boolean(this.rhino) || !this.useNativeIosCheetah;
+    if (shouldAttachFrameListener) {
+      this.frameListener = (frame: number[]) => {
+        this.enqueueFrame(frame, vp, localSessionId);
+      };
+      vp.addFrameListener(this.frameListener);
+    }
 
-    vp.addFrameListener(this.frameListener);
-    await vp.start(this.cheetah!.frameLength, this.cheetah!.sampleRate);
+    await vp.start(this.captureFrameLength, this.captureSampleRate);
     this.listening = true;
     const recordingState = (await vp.isRecording?.()) ?? null;
     const nativeDiagnostics = await this.getNativeAudioDiagnostics();
@@ -758,8 +791,11 @@ export class PicovoiceSttProvider implements SttProvider {
       sessionId: localSessionId,
       isRecording: recordingState,
       engineRunning: recordingState,
-      nativeDiagnostics
+      nativeDiagnostics,
+      mode: this.useNativeIosCheetah ? 'native_cheetah' : 'js_cheetah',
+      frameListenerAttached: shouldAttachFrameListener
     });
+    if (!shouldAttachFrameListener) return;
 
     const gotFrames = await this.waitForFrames(NO_FRAMES_FIRST_WAIT_MS);
     if (gotFrames || !this.listening || localSessionId !== this.activeSessionId) return;
@@ -823,6 +859,7 @@ export class PicovoiceSttProvider implements SttProvider {
 
     const vp = this.modules.VoiceProcessor.instance;
     const isNativeMode = this.useNativeIosCheetah;
+    const hadFrameListener = Boolean(this.frameListener);
     const localSessionId = this.activeSessionId;
 
     try {
@@ -836,8 +873,10 @@ export class PicovoiceSttProvider implements SttProvider {
     this.errorListener = null;
     this.setFastMode(false);
 
-    if (!isNativeMode) {
-      this.removeNativeTextSubscriptions();
+    if (hadFrameListener) {
+      if (!isNativeMode) {
+        this.removeNativeTextSubscriptions();
+      }
       await this.waitForIdle();
       this.busy = false;
     }
@@ -874,9 +913,9 @@ export class PicovoiceSttProvider implements SttProvider {
         transcript,
         noFrames: false,
         noFramesReason: this.lastVoiceProcessorError ?? undefined,
-        finalRhinoIntent: undefined,
-        finalRhinoUnderstood: undefined,
-        finalRhinoSlots: {},
+        finalRhinoIntent: this.latestInference?.intent,
+        finalRhinoUnderstood: this.latestInference?.isUnderstood,
+        finalRhinoSlots: this.latestInference?.slots ?? {},
         debug: __DEV__ ? { ...this.debugMetrics } : undefined
       };
     }
@@ -947,8 +986,8 @@ export class PicovoiceSttProvider implements SttProvider {
     this.removeNativeTextSubscriptions();
     this.busy = false;
     this.processingLoopActive = false;
-    this.frameQueue = [];
-    this.frameQueueHead = 0;
+    this.captureRingBuffer?.clear();
+    this.rhinoRingBuffer?.clear();
     this.partialTranscript = '';
     this.latestPartialForUi = '';
     this.nativeFinalTranscript = '';
@@ -992,8 +1031,9 @@ export class PicovoiceSttProvider implements SttProvider {
 
   private async ensureReady(): Promise<void> {
     if (this.modules) {
-      if (this.useNativeIosCheetah && (this.config.disableRhino || this.rhino || !this.config.rhinoContextPath)) return;
-      if (!this.useNativeIosCheetah && this.cheetah && (this.config.disableRhino || this.rhino || !this.config.rhinoContextPath)) return;
+      if ((this.useNativeIosCheetah || this.cheetah) && (this.config.disableRhino || this.rhino || !this.config.rhinoContextPath)) {
+        return;
+      }
     }
 
     const accessKey = this.config.accessKey.trim();
@@ -1013,6 +1053,7 @@ export class PicovoiceSttProvider implements SttProvider {
       await this.nativeBridge.configureNativeCheetah(accessKey, cheetahModelPath, endpointDuration, true);
       this.useNativeIosCheetah = true;
       this.cheetah = null;
+      this.cheetahSampleRate = 16000;
       this.debugLog('native_cheetah_mode_enabled', { sampleRate: 16000, frameLength: 512 });
     } else {
       const cheetahCandidates = Array.from(new Set([cheetahModelPath, rawCheetahPath].filter(Boolean)));
@@ -1022,10 +1063,33 @@ export class PicovoiceSttProvider implements SttProvider {
         this.config.endpointDurationSec ?? 1
       );
       this.useNativeIosCheetah = false;
+      this.cheetahSampleRate = this.cheetah.sampleRate;
     }
 
-    const useRhino = !this.config.disableRhino && Boolean(rhinoContextPath) && Boolean(this.modules.Rhino);
-    if (useRhino && !this.useNativeIosCheetah) {
+    const rhinoLooksIosOnly = Boolean(rhinoContextPath?.includes('_ios_'));
+    const rhinoModelLooksIosOnly = Boolean(rhinoModelPath?.includes('_ios_'));
+    const shouldDisableRhinoOnAndroid =
+      Platform.OS === 'android' && (!rhinoContextPath || rhinoLooksIosOnly || rhinoModelLooksIosOnly);
+    if (shouldDisableRhinoOnAndroid) {
+      this.debugLog('rhino_disabled_android_missing_assets', {
+        hasContextPath: Boolean(rhinoContextPath),
+        looksIosOnly: rhinoLooksIosOnly,
+        modelLooksIosOnly: rhinoModelLooksIosOnly
+      });
+    }
+
+    const useRhino =
+      !this.config.disableRhino &&
+      !shouldDisableRhinoOnAndroid &&
+      Boolean(rhinoContextPath) &&
+      Boolean(this.modules.Rhino);
+
+    if (useRhino) {
+      if (Platform.OS === 'ios' && !rhinoModelPath) {
+        this.debugLog('rhino_model_default_used_ios', {
+          reason: 'model_path_missing'
+        });
+      }
       try {
         const created = await createRhino(this.modules.Rhino!, {
           accessKey,
@@ -1036,10 +1100,33 @@ export class PicovoiceSttProvider implements SttProvider {
         });
         this.rhino = created.instance;
         this.rhinoEngineKey = created.key;
+        this.cheetahSampleRate = this.useNativeIosCheetah ? 16000 : (this.cheetah?.sampleRate ?? 0);
+        this.rhinoSampleRate = this.rhino.sampleRate;
+        const sampleRatePolicy = evaluateSampleRatePolicy({
+          captureSampleRate: this.cheetahSampleRate || 16000,
+          cheetahSampleRate: this.cheetahSampleRate || undefined,
+          rhinoSampleRate: this.rhinoSampleRate || undefined
+        });
+        this.captureVsCheetahMismatch = sampleRatePolicy.captureVsCheetahMismatch;
+        this.rhinoVsCheetahMismatch = sampleRatePolicy.rhinoVsCheetahMismatch;
+        this.rhinoVsCaptureMismatch = sampleRatePolicy.rhinoVsCaptureMismatch;
+
+        if (sampleRatePolicy.rhinoDisabled) {
+          this.debugLog('rhino_sr_mismatch_disabled', {
+            captureSampleRate: this.cheetahSampleRate || 16000,
+            cheetahSampleRate: this.cheetahSampleRate || undefined,
+            rhinoSampleRate: this.rhinoSampleRate || undefined
+          });
+          await releaseRhino(this.rhinoEngineKey);
+          this.rhinoEngineKey = null;
+          this.rhino = null;
+        }
+
         this.debugLog('rhino_ready', {
           sensitivity: 0.6,
           endpointDurationSec: 1.0,
-          hasModelPath: Boolean(rhinoModelPath)
+          hasModelPath: Boolean(rhinoModelPath),
+          sampleRate: this.rhinoSampleRate
         });
       } catch (error) {
         // Fallback gracefully to STT-only if Rhino fails to initialize.
@@ -1053,21 +1140,25 @@ export class PicovoiceSttProvider implements SttProvider {
       await releaseRhino(this.rhinoEngineKey);
       this.rhinoEngineKey = null;
       this.rhino = null;
+      this.rhinoSampleRate = 0;
+      this.rhinoVsCaptureMismatch = false;
+      this.rhinoVsCheetahMismatch = false;
     }
   }
 
   private async drainFrameQueue(sessionId: number): Promise<void> {
     try {
-      while (this.cheetah && this.listening && sessionId === this.activeSessionId) {
+      while (this.listening && sessionId === this.activeSessionId) {
+        if (!this.cheetah && !this.rhino) break;
         const queueSize = this.getQueueSize();
         if (queueSize <= 0) break;
 
-        const batch = this.takeBatchSamples();
-        if (batch.length === 0) break;
+        const frame = this.readProcessingFrame();
+        if (!frame) break;
 
         const startedAt = Date.now();
         try {
-          await this.handleCheetahBatch(batch);
+          await this.processProcessingFrame(frame);
           const batchMs = Date.now() - startedAt;
           this.debugMetrics.batchesProcessed += 1;
           const count = this.debugMetrics.batchesProcessed;
@@ -1077,7 +1168,7 @@ export class PicovoiceSttProvider implements SttProvider {
           this.lastVoiceProcessorError = error instanceof Error ? error.message : String(error);
           this.debugLog('batch_process_error', {
             sessionId,
-            batchLen: batch.length,
+            batchLen: frame.length,
             queueSize: this.getQueueSize(),
             message: this.lastVoiceProcessorError
           });
@@ -1088,7 +1179,7 @@ export class PicovoiceSttProvider implements SttProvider {
     } finally {
       this.processingLoopActive = false;
       this.busy = false;
-      if (this.getQueueSize() > 0 && this.cheetah && this.listening && sessionId === this.activeSessionId) {
+      if (this.getQueueSize() > 0 && this.listening && sessionId === this.activeSessionId) {
         this.processingLoopActive = true;
         this.busy = true;
         void this.drainFrameQueue(sessionId);
