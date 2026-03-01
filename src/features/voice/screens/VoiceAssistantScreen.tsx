@@ -19,6 +19,8 @@ export function VoiceAssistantScreen() {
     rhinoContextPath?: string;
   }>({});
   const [assetsReady, setAssetsReady] = React.useState(false);
+  const [prewarmToken, setPrewarmToken] = React.useState(0);
+  const hasPrewarmedRef = React.useRef(false);
 
   const accessKey = getPicovoiceAccessKey();
   const cheetahModelPath =
@@ -33,7 +35,7 @@ export function VoiceAssistantScreen() {
     const loadBundledVoiceAssets = async () => {
       try {
         const cheetahAsset = Asset.fromModule(require('../../../../assets/cheetah_params_es.pv'));
-        const rhinoContextAsset = Asset.fromModule(require('../../../../assets/coffee_maker_ios.rhn'));
+        const rhinoContextAsset = Asset.fromModule(require('../../../../assets/app_V1_es_ios_v4_0_0.rhn'));
 
         await Promise.all([cheetahAsset.downloadAsync(), rhinoContextAsset.downloadAsync()]);
 
@@ -57,6 +59,14 @@ export function VoiceAssistantScreen() {
     };
   }, []);
 
+  React.useEffect(() => {
+    if (!assetsReady || !accessKey) return;
+    if (hasPrewarmedRef.current) return;
+    hasPrewarmedRef.current = true;
+    // PERF: signal prewarm once assets + key are ready.
+    setPrewarmToken((value) => value + 1);
+  }, [accessKey, assetsReady]);
+
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
       <View style={styles.content}>
@@ -66,6 +76,7 @@ export function VoiceAssistantScreen() {
           rhinoContextPath={rhinoContextPath}
           rhinoModelPath={rhinoModelPath || undefined}
           enabled={assetsReady}
+          prewarmToken={prewarmToken}
           onOpenCatalog={({ query, categorySlug }) => {
             (navigation.getParent() as any)?.navigate?.('CatalogTab', {
               screen: 'CatalogMain',

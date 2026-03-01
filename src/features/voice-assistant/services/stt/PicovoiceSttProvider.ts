@@ -1,24 +1,10 @@
 import { NativeEventEmitter, NativeModules, Platform } from 'react-native';
 import { SttProvider, SttResult, SttStartOptions } from './types';
+import { createRhino, releaseRhino, RhinoInference, RhinoInstance } from './rhinoEngine';
 
 type CheetahInstance = {
   process: (pcm: number[]) => Promise<{ transcript?: string; isEndpoint?: boolean } | string>;
   flush: () => Promise<{ transcript?: string } | string>;
-  frameLength: number;
-  sampleRate: number;
-  delete?: () => Promise<void> | void;
-};
-
-type RhinoInference = {
-  isFinalized?: boolean;
-  isUnderstood?: boolean;
-  intent?: string;
-  slots?: Record<string, string>;
-};
-
-type RhinoInstance = {
-  process: (pcm: number[]) => Promise<RhinoInference>;
-  reset?: () => Promise<void> | void;
   frameLength: number;
   sampleRate: number;
   delete?: () => Promise<void> | void;
@@ -59,7 +45,15 @@ type PicovoiceModules = {
     ) => Promise<CheetahInstance>;
   };
   Rhino?: {
-    create: (accessKey: string, contextPath: string, modelPath?: string) => Promise<RhinoInstance>;
+    create: (
+      accessKey: string,
+      contextPath: string,
+      modelPath?: string,
+      device?: string,
+      sensitivity?: number,
+      endpointDurationSec?: number,
+      requireEndpoint?: boolean
+    ) => Promise<RhinoInstance>;
   };
   VoiceProcessor: {
     instance: VoiceProcessorInstance;
@@ -162,6 +156,7 @@ export class PicovoiceSttProvider implements SttProvider {
   private modules: PicovoiceModules | null = null;
   private cheetah: CheetahInstance | null = null;
   private rhino: RhinoInstance | null = null;
+  private rhinoEngineKey: string | null = null;
   private frameListener: ((frame: number[]) => void) | null = null;
   private errorListener: ((error: unknown) => void) | null = null;
   private partialTranscript = '';
@@ -981,7 +976,8 @@ export class PicovoiceSttProvider implements SttProvider {
       await this.nativeBridge?.clearNativeCheetah?.();
     }
     if (this.cheetah?.delete) await this.cheetah.delete();
-    if (this.rhino?.delete) await this.rhino.delete();
+    await releaseRhino(this.rhinoEngineKey);
+    this.rhinoEngineKey = null;
 
     this.cheetah = null;
     this.rhino = null;
@@ -1030,8 +1026,32 @@ export class PicovoiceSttProvider implements SttProvider {
 
     const useRhino = !this.config.disableRhino && Boolean(rhinoContextPath) && Boolean(this.modules.Rhino);
     if (useRhino && !this.useNativeIosCheetah) {
-      this.rhino = await this.modules.Rhino!.create(accessKey, rhinoContextPath!, rhinoModelPath);
+      try {
+        const created = await createRhino(this.modules.Rhino!, {
+          accessKey,
+          contextPath: rhinoContextPath!,
+          modelPath: rhinoModelPath,
+          sensitivity: 0.6,
+          endpointDurationSec: 1.0
+        });
+        this.rhino = created.instance;
+        this.rhinoEngineKey = created.key;
+        this.debugLog('rhino_ready', {
+          sensitivity: 0.6,
+          endpointDurationSec: 1.0,
+          hasModelPath: Boolean(rhinoModelPath)
+        });
+      } catch (error) {
+        // Fallback gracefully to STT-only if Rhino fails to initialize.
+        this.rhino = null;
+        this.rhinoEngineKey = null;
+        this.debugLog('rhino_init_failed_fallback', {
+          message: error instanceof Error ? error.message : String(error)
+        });
+      }
     } else {
+      await releaseRhino(this.rhinoEngineKey);
+      this.rhinoEngineKey = null;
       this.rhino = null;
     }
   }

@@ -23,6 +23,7 @@ type VoiceOrbScreenProps = {
   rhinoContextPath: string;
   rhinoModelPath?: string;
   enabled?: boolean;
+  prewarmToken?: number;
   onOpenCatalog?: (params: { query?: string; categorySlug?: string }) => void;
   onOpenOrders?: () => void;
 };
@@ -62,6 +63,7 @@ export function VoiceOrbScreen({
   rhinoContextPath,
   rhinoModelPath,
   enabled = true,
+  prewarmToken = 0,
   onOpenCatalog,
   onOpenOrders
 }: VoiceOrbScreenProps) {
@@ -71,6 +73,12 @@ export function VoiceOrbScreen({
   const addItem = useCartStore((s) => s.addItem);
   const wasFocusedRef = React.useRef(isFocused);
   const [isVoiceStarting, setIsVoiceStarting] = React.useState(false);
+  const [isOrbVideoPlaying, setIsOrbVideoPlaying] = React.useState(false);
+  const sttRef = React.useRef<PicovoiceSttProvider | null>(null);
+  const clientRef = React.useRef<VoiceClient | null>(null);
+  const clientConfigKeyRef = React.useRef('');
+  const prewarmedConfigRef = React.useRef('');
+  const [clientReady, setClientReady] = React.useState(false);
 
   const inactiveClient = React.useMemo(
     () =>
@@ -87,24 +95,110 @@ export function VoiceOrbScreen({
     []
   );
 
-  const voiceClient = React.useMemo(() => {
-    if (!enabled) return null;
-    if (!accessKey || !cheetahModelPath) return null;
-
-    const stt = new PicovoiceSttProvider({
+  const desiredConfigKey = React.useMemo(() => {
+    if (!enabled) return '';
+    if (!accessKey || !cheetahModelPath) return '';
+    return JSON.stringify({
       accessKey,
       cheetahModelPath,
       rhinoContextPath,
-      rhinoModelPath,
-      disableRhino: true,
-      endpointDurationSec: 0.45,
-      organicTerms: ['aguacate hass', 'tomates organicos', 'lechuga', 'finca', 'sin quimicos']
-    });
-
-    return new VoiceClient(stt, new NoopTtsService(), {
-      hasRecordAudioPermission: () => stt.hasPermission()
+      rhinoModelPath: rhinoModelPath ?? '',
+      enabled
     });
   }, [accessKey, cheetahModelPath, enabled, rhinoContextPath, rhinoModelPath]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const syncVoiceClient = async () => {
+      if (!desiredConfigKey) {
+        const oldClient = clientRef.current;
+        clientRef.current = null;
+        sttRef.current = null;
+        clientConfigKeyRef.current = '';
+        setClientReady(false);
+        if (oldClient) {
+          try {
+            await oldClient.dispose();
+          } catch {
+            // noop
+          }
+        }
+        return;
+      }
+
+      if (clientConfigKeyRef.current === desiredConfigKey && clientRef.current) {
+        if (!clientReady) setClientReady(true);
+        return;
+      }
+
+      // PERF: Keep one client/provider instance per effective config to avoid cold starts.
+      const oldClient = clientRef.current;
+      clientRef.current = null;
+      sttRef.current = null;
+      clientConfigKeyRef.current = '';
+      setClientReady(false);
+      if (oldClient) {
+        try {
+          await oldClient.dispose();
+        } catch {
+          // noop
+        }
+      }
+      if (cancelled) return;
+
+      const nextStt = new PicovoiceSttProvider({
+        accessKey,
+        cheetahModelPath,
+        rhinoContextPath,
+        rhinoModelPath,
+        disableRhino: false,
+        endpointDurationSec: 1.0,
+        organicTerms: ['aguacate hass', 'tomates organicos', 'lechuga', 'finca', 'sin quimicos']
+      });
+      const nextClient = new VoiceClient(nextStt, new NoopTtsService(), {
+        hasRecordAudioPermission: () => nextStt.hasPermission()
+      });
+
+      sttRef.current = nextStt;
+      clientRef.current = nextClient;
+      clientConfigKeyRef.current = desiredConfigKey;
+      setClientReady(true);
+      if (__DEV__) {
+        console.debug('[voice-debug][ui] client_singleton_created', { configKey: desiredConfigKey });
+      }
+    };
+
+    void syncVoiceClient();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessKey, cheetahModelPath, clientReady, desiredConfigKey, rhinoContextPath, rhinoModelPath]);
+
+  React.useEffect(() => {
+    return () => {
+      const oldClient = clientRef.current;
+      clientRef.current = null;
+      sttRef.current = null;
+      clientConfigKeyRef.current = '';
+      if (!oldClient) return;
+      void oldClient.dispose();
+    };
+  }, []);
+
+  React.useEffect(() => {
+    if (!enabled) return;
+    if (!clientReady || !clientRef.current || !sttRef.current) return;
+    const configKey = clientConfigKeyRef.current;
+    if (!configKey) return;
+    if (prewarmedConfigRef.current === `${configKey}:${prewarmToken}`) return;
+    prewarmedConfigRef.current = `${configKey}:${prewarmToken}`;
+
+    // PERF: lightweight prewarm to reduce first tap-to-partial latency.
+    queueMicrotask(() => {
+      void sttRef.current?.hasPermission?.();
+      void clientRef.current?.isListening();
+    });
+  }, [clientReady, enabled, prewarmToken]);
 
   const resolveCandidates = React.useCallback(
     async ({ query, intentType }: { query: string; intentType: VoiceIntentType }): Promise<VoiceCandidate[]> => {
@@ -163,7 +257,7 @@ export function VoiceOrbScreen({
   }, []);
 
   const voice = useVoiceAssistant({
-    client: voiceClient ?? inactiveClient,
+    client: clientReady && clientRef.current ? clientRef.current : inactiveClient,
     timeoutMs: 9_500,
     tracker: trackVoiceEvent,
     screenContext: 'voice',
@@ -188,6 +282,15 @@ export function VoiceOrbScreen({
       },
       onOpenOrders: async () => {
         onOpenOrders?.();
+      },
+      onOpenCart: async () => {
+        // TODO: wire cart navigator route if voice context should open cart directly.
+      },
+      onRemoveFromCart: async () => {
+        // TODO: implement remove-from-cart flow based on product resolution strategy.
+      },
+      onClearCart: async () => {
+        // TODO: implement clear-cart action in cart store if exposed.
       }
     }
   });
@@ -199,7 +302,7 @@ export function VoiceOrbScreen({
     wasFocusedRef.current = isFocused;
   }, [isFocused, voice.closeSheet]);
 
-  const disabled = !enabled || !voiceClient;
+  const disabled = !enabled || !clientReady || !clientRef.current;
   const showReviewEditor = voice.status === 'review';
   const showTopMatches = showReviewEditor && voice.candidates.length > 1;
   const showUnsupported = Boolean(voice.unsupportedIntent);
@@ -210,15 +313,20 @@ export function VoiceOrbScreen({
   const copyTitle = voice.status === 'listening' ? 'Te escucho...' : 'Toca para hablar';
   const copySubtitle = liveSubtitle;
   const auroraState = voice.status === 'listening' ? 'listening' : voice.status === 'processing' ? 'processing' : 'idle';
-  const shouldPlayOrbVideo = voice.status === 'idle' && !isVoiceStarting;
+  const shouldPlayOrbVideo = isOrbVideoPlaying;
 
   React.useEffect(() => {
     if (voice.status !== 'idle') {
       setIsVoiceStarting(false);
+      return;
     }
+    // Pause the orb video whenever flow returns to idle.
+    setIsOrbVideoPlaying(false);
   }, [voice.status]);
 
   const beginListeningWithVideoPause = React.useCallback(async () => {
+    // Start video playback on explicit user interaction with the mic button.
+    setIsOrbVideoPlaying(true);
     setIsVoiceStarting(true);
     try {
       await voice.beginListening();

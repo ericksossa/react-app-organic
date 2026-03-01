@@ -384,7 +384,7 @@ export function CatalogScreen({ navigation, route }: Props) {
     const loadVoiceAssets = async () => {
       try {
         const cheetahAsset = Asset.fromModule(require('../../../../assets/cheetah_params_es.pv'));
-        const rhinoContextAsset = Asset.fromModule(require('../../../../assets/coffee_maker_ios.rhn'));
+        const rhinoContextAsset = Asset.fromModule(require('../../../../assets/app_V1_es_ios_v4_0_0.rhn'));
 
         await Promise.all([cheetahAsset.downloadAsync(), rhinoContextAsset.downloadAsync()]);
         if (!mounted) return;
@@ -449,7 +449,7 @@ export function CatalogScreen({ navigation, route }: Props) {
       cheetahModelPath: voiceCheetahModelPath,
       rhinoContextPath: voiceRhinoContextPath,
       rhinoModelPath: voiceRhinoModelPath || undefined,
-      endpointDurationSec: 1.1,
+      endpointDurationSec: 1.0,
       organicTerms: ['aguacate hass', 'tomate orgánico', 'lechuga', 'finca', 'sin químicos']
     });
 
@@ -606,6 +606,15 @@ export function CatalogScreen({ navigation, route }: Props) {
       },
       onOpenOrders: async () => {
         (navigation.getParent() as any)?.navigate?.('HomeTab', { screen: 'OrdersMain' });
+      },
+      onOpenCart: async () => {
+        (navigation.getParent() as any)?.navigate?.('CartTab', { screen: 'CartMain' });
+      },
+      onRemoveFromCart: async () => {
+        // TODO: implement remove-from-cart in catalog voice flow.
+      },
+      onClearCart: async () => {
+        // TODO: implement clear-cart in catalog voice flow.
       }
     }
   });

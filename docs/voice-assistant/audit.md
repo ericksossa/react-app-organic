@@ -8,7 +8,7 @@
 ## Cómo funciona hoy
 1. Existe un tab independiente `VoiceTab` que renderiza `VoiceAssistantScreen`.
 2. `VoiceAssistantScreen` (estado previo):
-   - carga assets Picovoice con `expo-asset` (`cheetah_params_es.pv`, `coffee_maker_ios.rhn`, `porcupine_params_es.pv`, `hola_mercado.ppn`),
+   - carga assets Picovoice con `expo-asset` (`cheetah_params_es.pv`, `app_V1_es_ios_v4_0_0.rhn`, `porcupine_params_es.pv`, `hola_mercado.ppn`),
    - resuelve AccessKey/env,
    - montaba un único componente de voz.
 3. El componente único de voz concentraba toda la lógica:

@@ -60,6 +60,23 @@ Con flag activo:
   - `rhino_success`
 - Si Rhino no entiende, fallback automático a parser determinista.
 
+## Rhino iOS Context (v4)
+- Contexto iOS activo: `assets/app_V1_es_ios_v4_0_0.rhn`
+- Modelo Rhino: configurar `EXPO_PUBLIC_PICOVOICE_RHINO_MODEL_PATH` si tu build no usa el modelo por defecto del SDK.
+- Runtime key: `PICOVOICE_ACCESS_KEY` (preferido) o `EXPO_PUBLIC_PICOVOICE_ACCESS_KEY` para desarrollo local.
+- Config de engine: `sensitivity=0.6`, `endpointDurationSec=1.0`.
+
+### Intents/slots ejecutados por acción
+- `BuscarProducto` / `search_products` con `slots.producto` -> búsqueda real de catálogo.
+- `AgregarCarrito` / `add_to_cart` con `slots.producto` + `slots.cantidad` -> `addItem`.
+- `AbrirCarrito` / `QuitarCarrito` / `VaciarCarrito` -> stubs con `TODO` cuando no existe ruta/store expuesto.
+
+### Cómo actualizar Rhino context
+1. Exporta el `.rhn` desde Picovoice Console.
+2. Reemplaza el archivo en `assets/app_V1_es_ios_v4_0_0.rhn`.
+3. Si cambió el modelo base, actualiza `EXPO_PUBLIC_PICOVOICE_RHINO_MODEL_PATH`.
+4. Rebuild iOS (`expo run:ios` o EAS Build) para asegurar bundling del nuevo contexto.
+
 ## Privacidad y telemetría
 - Transcripción se mantiene solo en memoria.
 - No se loguea texto en analytics.

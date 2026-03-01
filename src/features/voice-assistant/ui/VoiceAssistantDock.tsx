@@ -84,8 +84,8 @@ export function VoiceAssistantDock({
       cheetahModelPath,
       rhinoContextPath,
       rhinoModelPath,
-      disableRhino: true,
-      endpointDurationSec: 0.45,
+      disableRhino: false,
+      endpointDurationSec: 1.0,
       organicTerms: ['aguacate hass', 'tomates organicos', 'lechuga', 'finca', 'sin quimicos']
     });
 
@@ -193,6 +193,15 @@ export function VoiceAssistantDock({
       },
       onOpenOrders: async () => {
         onOpenOrders?.();
+      },
+      onOpenCart: async () => {
+        // TODO: connect to cart screen route from dock context.
+      },
+      onRemoveFromCart: async () => {
+        // TODO: implement remove-from-cart behavior when store API is available.
+      },
+      onClearCart: async () => {
+        // TODO: implement cart clear action when store API is available.
       }
     }
   });

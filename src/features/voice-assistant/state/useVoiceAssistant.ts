@@ -4,6 +4,7 @@ import { buildSafeVoicePayload, noopVoiceTracker, VoiceEventTracker } from '../a
 import { scoreConfidence, VoiceScreenContext } from '../domain/confidence';
 import { ParsedIntent, VoiceCandidate, VoiceIntentType } from '../domain/intents';
 import { parseIntent } from '../domain/parseIntent';
+import { executeRhinoAction } from '../services/executeRhinoAction';
 import { VoiceClient } from '../services/VoiceClient';
 import { disambiguationReducer, initialDisambiguationState } from './disambiguation';
 
@@ -71,6 +72,8 @@ function mapRhinoIntent(intent?: string): VoiceIntentType | null {
   const safe = (intent ?? '').toLowerCase();
   if (!safe) return null;
 
+  if (safe.includes('agregarcarrito') || safe.includes('agregar_carrito')) return 'ADD_TO_CART';
+  if (safe.includes('buscarproducto') || safe.includes('buscar_producto')) return 'SEARCH_PRODUCTS';
   if (safe.includes('add') || safe.includes('cart') || safe.includes('canasta')) return 'ADD_TO_CART';
   if (safe.includes('track') || safe.includes('pedido') || safe.includes('order_status')) return 'TRACK_ORDER';
   if (safe.includes('repeat') || safe.includes('reorder')) return 'REPEAT_LAST_ORDER';
@@ -91,8 +94,8 @@ function applyRhinoHint(parsed: ParsedIntent, rhinoHint: { used: boolean; succes
 
   const mappedType = mapRhinoIntent(rhinoHint.intent);
   const slots = rhinoHint.slots ?? {};
-  const slotProduct = fromRhinoSlot(slots, ['product', 'item', 'query']);
-  const slotQtyRaw = fromRhinoSlot(slots, ['quantity', 'qty', 'amount']);
+  const slotProduct = fromRhinoSlot(slots, ['producto', 'product', 'item', 'query']);
+  const slotQtyRaw = fromRhinoSlot(slots, ['cantidad', 'quantity', 'qty', 'amount']);
   const slotQty = slotQtyRaw ? Number(slotQtyRaw.replace(',', '.')) : undefined;
 
   return {
@@ -127,6 +130,9 @@ export type VoiceAssistantActions = {
   onRepeatLastOrder?: () => Promise<void> | void;
   onTrackOrder?: () => Promise<void> | void;
   onOpenOrders?: () => Promise<void> | void;
+  onOpenCart?: () => Promise<void> | void;
+  onRemoveFromCart?: (params: { query: string; qty?: number }) => Promise<void> | void;
+  onClearCart?: () => Promise<void> | void;
 };
 
 export type UseVoiceAssistantArgs = {
@@ -172,9 +178,12 @@ export function useVoiceAssistant({
   const startTsRef = React.useRef<number>(0);
   const timeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const flowIdRef = React.useRef(0);
-  const partialUiTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const partialUiRafRef = React.useRef<number | null>(null);
   const pendingPartialRef = React.useRef('');
   const lastPartialUiEmitRef = React.useRef(0);
+  const reviewRequestIdRef = React.useRef(0);
+  const lastResolvedReviewDraftRef = React.useRef('');
+  const appStateCancelInFlightRef = React.useRef(false);
 
   const clearTimeoutRef = React.useCallback(() => {
     if (!timeoutRef.current) return;
@@ -263,32 +272,34 @@ export function useVoiceAssistant({
     debugLog('begin_listening');
     pendingPartialRef.current = '';
     lastPartialUiEmitRef.current = 0;
-    if (partialUiTimerRef.current) {
-      clearTimeout(partialUiTimerRef.current);
-      partialUiTimerRef.current = null;
+    if (partialUiRafRef.current !== null) {
+      cancelAnimationFrame(partialUiRafRef.current);
+      partialUiRafRef.current = null;
     }
 
     const started = await client.startListening((partial) => {
       if (!isFlowActive(flowId)) return;
       pendingPartialRef.current = partial;
-      const now = Date.now();
-      const elapsed = now - lastPartialUiEmitRef.current;
-      const emit = () => {
-        lastPartialUiEmitRef.current = Date.now();
+      if (partialUiRafRef.current !== null) return;
+
+      // PERF: Coalesce partial updates into RAF ticks with a minimum cadence window.
+      const flushPartial = () => {
+        partialUiRafRef.current = null;
+        const now = Date.now();
+        const elapsed = now - lastPartialUiEmitRef.current;
+        if (elapsed < PARTIAL_UI_THROTTLE_MS) {
+          partialUiRafRef.current = requestAnimationFrame(flushPartial);
+          return;
+        }
+
         const nextPartial = pendingPartialRef.current;
         if (nextPartial === transcriptRef.current) return;
+        lastPartialUiEmitRef.current = now;
         debugLog('on_partial', { len: nextPartial.length, preview: nextPartial.slice(-80) });
         setLiveTranscript(nextPartial);
       };
-      if (elapsed >= PARTIAL_UI_THROTTLE_MS) {
-        emit();
-        return;
-      }
-      if (partialUiTimerRef.current) return;
-      partialUiTimerRef.current = setTimeout(() => {
-        partialUiTimerRef.current = null;
-        emit();
-      }, PARTIAL_UI_THROTTLE_MS - elapsed);
+
+      partialUiRafRef.current = requestAnimationFrame(flushPartial);
     });
 
     if (!isFlowActive(flowId)) return;
@@ -317,7 +328,10 @@ export function useVoiceAssistant({
     startTsRef.current = Date.now();
     setStatus('listening');
     debugLog('listening_started');
-    triggerFeedback('start');
+    // PERF: Keep start path non-blocking; feedback should not delay listening UX.
+    queueMicrotask(() => {
+      triggerFeedback('start');
+    });
     tracker('voice_listen_started', buildSafeVoicePayload({}));
 
     clearTimeoutRef();
@@ -374,6 +388,13 @@ export function useVoiceAssistant({
       const parsed = applyRhinoHint(parseIntent(finalTranscript), result.rhinoHint);
       const latencyMs = Date.now() - startTsRef.current;
       const confidenceBreakdown = scoreConfidence(parsed, screenContext);
+      const normalizedQuery = (parsed.entities.productQuery ?? finalTranscript).trim();
+      const isProductIntent = parsed.type === 'SEARCH_PRODUCTS' || parsed.type === 'ADD_TO_CART';
+      const queryTokens = normalizedQuery.split(/\s+/).filter(Boolean);
+      const isLikelyAmbiguousQuery =
+        normalizedQuery.length > 32 || queryTokens.length >= 4 || /\b(o|u|\/)\b/i.test(normalizedQuery);
+      const shouldResolveCandidates =
+        parsed.requiresConfirmation || confidenceBreakdown.bucket !== 'high' || (isProductIntent && isLikelyAmbiguousQuery);
 
       setLiveTranscript(finalTranscript);
       setParsedIntent(parsed);
@@ -382,15 +403,108 @@ export function useVoiceAssistant({
       tracker(
         'voice_rhino_compared',
         buildSafeVoicePayload({
-          rhinoUsed: result.rhinoHint.used,
-          rhinoSuccess: result.rhinoHint.success,
-          success: result.rhinoHint.success
+          rhinoUsed: Boolean(result.finalRhinoIntent),
+          rhinoSuccess: Boolean(result.finalRhinoUnderstood && result.finalRhinoIntent),
+          success: Boolean(result.finalRhinoUnderstood && result.finalRhinoIntent)
         })
       );
 
+      const rhinoActionResult = await executeRhinoAction(
+        {
+          isUnderstood: result.finalRhinoUnderstood,
+          intent: result.finalRhinoIntent,
+          slots: result.finalRhinoSlots
+        },
+        {
+          onSearchProducts: async (query) => {
+            await actions.onSearchProducts({ query });
+          },
+          onAddToCart: async (query, qty) => {
+            await actions.onAddToCart({ query, qty });
+          },
+          onOpenCart: actions.onOpenCart,
+          onRemoveFromCart: actions.onRemoveFromCart
+            ? async (query, qty) => actions.onRemoveFromCart?.({ query, qty })
+            : undefined,
+          onClearCart: actions.onClearCart
+        }
+      );
+
+      if (rhinoActionResult.ok) {
+        setStatus('success');
+        triggerFeedback('success');
+        tracker(
+          'voice_processed',
+          buildSafeVoicePayload({
+            intentType: result.finalRhinoIntent ?? parsed.type,
+            success: true,
+            latencyMs,
+            confidenceBucket: confidenceBreakdown.bucket,
+            rhinoUsed: true,
+            rhinoSuccess: true
+          })
+        );
+        return;
+      }
+
+      if (rhinoActionResult.reason === 'product_not_found' || rhinoActionResult.reason === 'missing_product_slot') {
+        const fallbackText = (
+          rhinoActionResult.normalizedSlots?.producto ??
+          rhinoActionResult.normalizedSlots?.product ??
+          finalTranscript
+        ).trim();
+        const reviewParsed = parseIntent(fallbackText);
+        const reviewCandidates = await resolveTopCandidates(reviewParsed);
+        if (!isFlowActive(flowId)) return;
+        setReviewState(reviewParsed, fallbackText, reviewCandidates);
+        tracker(
+          'voice_processed',
+          buildSafeVoicePayload({
+            intentType: result.finalRhinoIntent ?? reviewParsed.type,
+            success: false,
+            reason: rhinoActionResult.reason,
+            latencyMs,
+            confidenceBucket: reviewParsed.confidence,
+            rhinoUsed: true,
+            rhinoSuccess: false
+          })
+        );
+        return;
+      }
+
+      // PERF: Fast-path high-confidence intents; skip candidate resolution on hot path.
+      if (!shouldResolveCandidates) {
+        const execution = await executeIntent(parsed, finalTranscript);
+        if (!isFlowActive(flowId)) return;
+
+        if (execution === 'unsupported') {
+          setUnsupportedIntent(parsed.type);
+          setStatus('review');
+          tracker(
+            'voice_intent_not_supported',
+            buildSafeVoicePayload({ intentType: parsed.type, success: false, confidenceBucket: confidenceBreakdown.bucket })
+          );
+          return;
+        }
+
+        setStatus('success');
+        triggerFeedback('success');
+        tracker(
+          'voice_processed',
+          buildSafeVoicePayload({
+            intentType: parsed.type,
+            success: true,
+            latencyMs,
+            confidenceBucket: confidenceBreakdown.bucket,
+            rhinoUsed: result.rhinoHint.used,
+            rhinoSuccess: result.rhinoHint.success
+          })
+        );
+        return;
+      }
+
       const candidates = await resolveTopCandidates(parsed);
       if (!isFlowActive(flowId)) return;
-
       const ambiguousByCandidates = candidates.length > 1;
       const needsReview = parsed.requiresConfirmation || confidenceBreakdown.bucket !== 'high' || ambiguousByCandidates;
 
@@ -530,9 +644,9 @@ export function useVoiceAssistant({
     async (reason: 'user_cancel' | 'timeout' = 'user_cancel') => {
       newFlowId();
       clearTimeoutRef();
-      if (partialUiTimerRef.current) {
-        clearTimeout(partialUiTimerRef.current);
-        partialUiTimerRef.current = null;
+      if (partialUiRafRef.current !== null) {
+        cancelAnimationFrame(partialUiRafRef.current);
+        partialUiRafRef.current = null;
       }
       await client.cancel();
       setStatus('idle');
@@ -562,45 +676,63 @@ export function useVoiceAssistant({
   React.useEffect(() => {
     if (status !== 'review') return;
 
-    const draft = disambiguation.draft.trim();
-    if (!draft) {
+    const rawDraft = disambiguation.draft;
+    const normalizedDraft = rawDraft.replace(/\s+/g, ' ').trim();
+    if (!normalizedDraft) {
       dispatchDisambiguation({ type: 'RESOLVE_DONE', candidates: [] });
+      lastResolvedReviewDraftRef.current = '';
       return;
     }
+    if (normalizedDraft === lastResolvedReviewDraftRef.current) return;
 
     dispatchDisambiguation({ type: 'RESOLVE_START' });
+    const requestId = ++reviewRequestIdRef.current;
+    const isUserEditingDraft = normalizedDraft !== transcriptRef.current.trim();
+    const debounceMs = isUserEditingDraft ? 350 : 0;
 
     const timer = setTimeout(() => {
       void (async () => {
-        const nextParsed = parseIntent(draft);
+        const nextParsed = parseIntent(normalizedDraft);
         setParsedIntent(nextParsed);
         const candidates = await resolveTopCandidates(nextParsed);
+        if (requestId !== reviewRequestIdRef.current) return;
+        lastResolvedReviewDraftRef.current = normalizedDraft;
         dispatchDisambiguation({ type: 'RESOLVE_DONE', candidates });
       })();
-    }, 250);
+    }, debounceMs);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+    };
   }, [disambiguation.draft, resolveTopCandidates, status]);
 
   React.useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
       // iOS permission prompts can temporarily move app to 'inactive'; avoid cancelling capture there.
-      if (state === 'background' && client.isListening()) {
-        void cancelListening('user_cancel');
-      }
+      if (state !== 'background') return;
+      if (!sheetVisible) return;
+      if (status === 'processing' || status === 'review') return;
+      if (!client.isListening()) return;
+      if (appStateCancelInFlightRef.current) return;
+
+      appStateCancelInFlightRef.current = true;
+      debugLog('appstate_background_cancel', { status, sheetVisible });
+      void cancelListening('user_cancel').finally(() => {
+        appStateCancelInFlightRef.current = false;
+      });
     });
 
     return () => {
       subscription.remove();
     };
-  }, [cancelListening]);
+  }, [cancelListening, client, debugLog, sheetVisible, status]);
 
   React.useEffect(() => {
     return () => {
       clearTimeoutRef();
-      if (partialUiTimerRef.current) {
-        clearTimeout(partialUiTimerRef.current);
-        partialUiTimerRef.current = null;
+      if (partialUiRafRef.current !== null) {
+        cancelAnimationFrame(partialUiRafRef.current);
+        partialUiRafRef.current = null;
       }
       void client.dispose();
     };

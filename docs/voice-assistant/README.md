@@ -15,6 +15,9 @@ Se mantiene `VoiceTab` y se añade integración push-to-talk en la SearchBar de 
 1. `VoiceSeedButton` (semilla) en SearchBar inicia/detiene escucha con push-to-talk.
 2. `useVoiceAssistant` maneja estados: `idle`, `listening`, `processing`, `review`, `success`, `permission_denied`, `error`.
 3. `PicovoiceSttProvider` usa Cheetah + Rhino + VoiceProcessor para transcripción/intención.
+   - Contexto iOS actual: `assets/app_V1_es_ios_v4_0_0.rhn`
+   - Sensitivity Rhino: `0.6`
+   - Endpoint Rhino: `1.0s`
 4. `parseIntent()` (determinista, sin LLM) mapea a intents MVP:
    - `SEARCH_PRODUCTS`
    - `ADD_TO_CART`
@@ -63,3 +66,4 @@ npm test
 - Búsqueda: reutiliza estado existente de `CatalogScreen` (`query`, `categorySlug`).
 - Carrito: reutiliza `useCartStore().addItem`.
 - Repeat/Track: stubs controlados con mensaje “Pronto”.
+- Config Rhino model path (si aplica): `EXPO_PUBLIC_PICOVOICE_RHINO_MODEL_PATH`.
