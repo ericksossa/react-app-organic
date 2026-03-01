@@ -51,7 +51,21 @@ function readProduct(slots: Record<string, string>): string {
 function readQty(slots: Record<string, string>): number {
   const raw = (slots.cantidad ?? slots.quantity ?? slots.qty ?? '').trim();
   if (!raw) return 1;
-  const value = Number(raw.replace(',', '.'));
+  const normalized = raw.toLowerCase().trim();
+
+  const wordToQty: Record<string, number> = {
+    uno: 1,
+    un: 1,
+    una: 1,
+    dos: 2,
+    tres: 3,
+    cuatro: 4
+  };
+
+  if (wordToQty[normalized]) return wordToQty[normalized];
+  if (normalized.includes('kilo') || normalized.includes('libra')) return 1;
+
+  const value = Number(normalized.replace(',', '.'));
   if (!Number.isFinite(value)) return 1;
   return Math.max(1, Math.floor(value));
 }
@@ -83,7 +97,13 @@ export async function executeRhinoAction(
     }
   }
 
-  if (normalizedIntent === 'agregarcarrito' || normalizedIntent === 'agregar_carrito' || normalizedIntent === 'add_to_cart') {
+  if (
+    normalizedIntent === 'agregarcarrito' ||
+    normalizedIntent === 'agregar_carrito' ||
+    normalizedIntent === 'agregarcanasta' ||
+    normalizedIntent === 'agregar_canasta' ||
+    normalizedIntent === 'add_to_cart'
+  ) {
     const query = readProduct(normalizedSlots);
     if (!query) return { ok: false, reason: 'missing_product_slot', normalizedIntent, normalizedSlots };
 
@@ -99,20 +119,38 @@ export async function executeRhinoAction(
     }
   }
 
-  if (normalizedIntent === 'abrircarrito' || normalizedIntent === 'abrir_carrito' || normalizedIntent === 'open_cart') {
+  if (
+    normalizedIntent === 'abrircarrito' ||
+    normalizedIntent === 'abrir_carrito' ||
+    normalizedIntent === 'abrircanasta' ||
+    normalizedIntent === 'abrir_canasta' ||
+    normalizedIntent === 'open_cart'
+  ) {
     if (!handlers.onOpenCart) return { ok: false, reason: 'unsupported_intent', normalizedIntent, normalizedSlots };
     await handlers.onOpenCart();
     return { ok: true, action: 'open_cart', normalizedIntent, normalizedSlots };
   }
 
-  if (normalizedIntent === 'quitarcarrito' || normalizedIntent === 'quitar_carrito' || normalizedIntent === 'remove_from_cart') {
+  if (
+    normalizedIntent === 'quitarcarrito' ||
+    normalizedIntent === 'quitar_carrito' ||
+    normalizedIntent === 'quitarcanasta' ||
+    normalizedIntent === 'quitar_canasta' ||
+    normalizedIntent === 'remove_from_cart'
+  ) {
     if (!handlers.onRemoveFromCart) return { ok: false, reason: 'unsupported_intent', normalizedIntent, normalizedSlots };
     const query = readProduct(normalizedSlots);
     await handlers.onRemoveFromCart(query, readQty(normalizedSlots));
     return { ok: true, action: 'remove_from_cart', normalizedIntent, normalizedSlots };
   }
 
-  if (normalizedIntent === 'vaciarcarrito' || normalizedIntent === 'vaciar_carrito' || normalizedIntent === 'clear_cart') {
+  if (
+    normalizedIntent === 'vaciarcarrito' ||
+    normalizedIntent === 'vaciar_carrito' ||
+    normalizedIntent === 'vaciarcanasta' ||
+    normalizedIntent === 'vaciar_canasta' ||
+    normalizedIntent === 'clear_cart'
+  ) {
     if (!handlers.onClearCart) return { ok: false, reason: 'unsupported_intent', normalizedIntent, normalizedSlots };
     await handlers.onClearCart();
     return { ok: true, action: 'clear_cart', normalizedIntent, normalizedSlots };

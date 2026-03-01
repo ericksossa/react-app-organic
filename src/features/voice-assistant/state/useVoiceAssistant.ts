@@ -72,9 +72,18 @@ function mapRhinoIntent(intent?: string): VoiceIntentType | null {
   const safe = (intent ?? '').toLowerCase();
   if (!safe) return null;
 
-  if (safe.includes('agregarcarrito') || safe.includes('agregar_carrito')) return 'ADD_TO_CART';
+  // PERF: prioritize explicit Rhino intents to avoid broad keyword collisions.
+  if (safe.includes('vaciarcanasta') || safe.includes('vaciar_canasta') || safe.includes('vaciarcarrito') || safe.includes('vaciar_carrito')) {
+    return null;
+  }
+  if (safe.includes('abrircanasta') || safe.includes('abrir_canasta') || safe.includes('abrircarrito') || safe.includes('abrir_carrito')) {
+    return null;
+  }
+  if (safe.includes('agregarcanasta') || safe.includes('agregar_canasta') || safe.includes('agregarcarrito') || safe.includes('agregar_carrito')) {
+    return 'ADD_TO_CART';
+  }
   if (safe.includes('buscarproducto') || safe.includes('buscar_producto')) return 'SEARCH_PRODUCTS';
-  if (safe.includes('add') || safe.includes('cart') || safe.includes('canasta')) return 'ADD_TO_CART';
+  if (safe.includes('add') || safe.includes('cart')) return 'ADD_TO_CART';
   if (safe.includes('track') || safe.includes('pedido') || safe.includes('order_status')) return 'TRACK_ORDER';
   if (safe.includes('repeat') || safe.includes('reorder')) return 'REPEAT_LAST_ORDER';
   if (safe.includes('search') || safe.includes('find') || safe.includes('catalog')) return 'SEARCH_PRODUCTS';
