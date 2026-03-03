@@ -14,6 +14,8 @@ import { useTheme } from '../../shared/theme/useTheme';
 import { AnimatedTabIcon } from './AnimatedTabIcon';
 import { withTabSceneTransition } from './withTabSceneTransition';
 import { useCartStore } from '../../state/cartStore';
+import { isFeatureEnabled } from '../../shared/feature-flags/featureFlags';
+import { FeatureDisabledScreen } from '../../shared/ui/FeatureDisabledScreen';
 
 const Tab = createBottomTabNavigator<AppTabsParamList>();
 
@@ -38,6 +40,51 @@ export function MainTabs() {
     void loadCart();
   }, [loadCart]);
 
+  const tabDefinitions = React.useMemo(
+    () => [
+      {
+        name: 'HomeTab' as const,
+        component: HomeScene,
+        label: 'Inicio',
+        icon: 'home' as const,
+        enabled: isFeatureEnabled('tabHome')
+      },
+      {
+        name: 'CatalogTab' as const,
+        component: CatalogScene,
+        label: 'Cosecha',
+        icon: 'explore' as const,
+        enabled: isFeatureEnabled('tabCatalog')
+      },
+      {
+        name: 'VoiceTab' as const,
+        component: VoiceScene,
+        label: 'Luna Verde',
+        icon: 'voice' as const,
+        enabled: isFeatureEnabled('tabVoice')
+      },
+      {
+        name: 'CartTab' as const,
+        component: CartScene,
+        label: 'Canasta',
+        icon: 'cart' as const,
+        enabled: isFeatureEnabled('tabCart')
+      }
+    ],
+    []
+  );
+
+  const enabledTabs = tabDefinitions.filter((tab) => tab.enabled);
+
+  if (enabledTabs.length === 0) {
+    return (
+      <FeatureDisabledScreen
+        title="Tabs desactivados"
+        description="No hay tabs activos. Revisa EXPO_PUBLIC_FF_TAB_* en tu entorno."
+      />
+    );
+  }
+
   const tabBarHeight = TAB_BAR_BASE_HEIGHT + insets.bottom;
   const tabBackground = isDark ? '#060A08' : '#FFFFFF';
   const tabBorder = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)';
@@ -54,6 +101,7 @@ export function MainTabs() {
 
   return (
     <Tab.Navigator
+      initialRouteName={enabledTabs[0].name}
       detachInactiveScreens={false}
       screenOptions={{
         headerShown: false,
@@ -70,67 +118,25 @@ export function MainTabs() {
         tabBarButton: renderTabButton
       }}
     >
-      <Tab.Screen
-        name="HomeTab"
-        component={HomeScene}
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <AnimatedTabIcon
-              focused={focused}
-              label="Inicio"
-              icon="home"
-              activeColor={activeTone}
-              inactiveColor={inactiveTone}
-            />
-          )
-        }}
-      />
-      <Tab.Screen
-        name="CatalogTab"
-        component={CatalogScene}
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <AnimatedTabIcon
-              focused={focused}
-              label="Cosecha"
-              icon="explore"
-              activeColor={activeTone}
-              inactiveColor={inactiveTone}
-            />
-          )
-        }}
-      />
-      <Tab.Screen
-        name="VoiceTab"
-        component={VoiceScene}
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <AnimatedTabIcon
-              focused={focused}
-              label="Luna Verde"
-              icon="voice"
-              activeColor={activeTone}
-              inactiveColor={inactiveTone}
-            />
-          )
-        }}
-      />
-      <Tab.Screen
-        name="CartTab"
-        component={CartScene}
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <AnimatedTabIcon
-              focused={focused}
-              label="Canasta"
-              icon="cart"
-              activeColor={activeTone}
-              inactiveColor={inactiveTone}
-              badgeCount={cartBadgeCount}
-            />
-          )
-        }}
-      />
+      {enabledTabs.map((tab) => (
+        <Tab.Screen
+          key={tab.name}
+          name={tab.name}
+          component={tab.component}
+          options={{
+            tabBarIcon: ({ focused }) => (
+              <AnimatedTabIcon
+                focused={focused}
+                label={tab.label}
+                icon={tab.icon}
+                activeColor={activeTone}
+                inactiveColor={inactiveTone}
+                badgeCount={tab.icon === 'cart' ? cartBadgeCount : 0}
+              />
+            )
+          }}
+        />
+      ))}
     </Tab.Navigator>
   );
 }

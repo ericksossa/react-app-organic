@@ -40,6 +40,7 @@ import { getCatalog } from '../../../services/api/catalogApi';
 import { useReducedMotionSetting } from '../../../design/motion/useReducedMotionSetting';
 import { Reveal } from '../../../design/motion/Reveal';
 import { useHamburgerDrawer } from '../../../app/navigation/HamburgerDrawer';
+import { FeatureGate } from '../../../shared/feature-flags/FeatureGate';
 
 const HERO_IMAGE =
   'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=1400&q=80';
@@ -492,38 +493,40 @@ export function HomeScreen({ navigation }: Props) {
           </View>
         ) : null}
 
-        <Reveal delayMs={20}>
-          <Pressable
-            onPress={() => navigation.getParent()?.navigate('VoiceTab' as never)}
-            style={[
-              styles.voiceShortcutCard,
-              {
-                borderColor: isLight ? 'rgba(40,179,130,0.30)' : 'rgba(111,168,138,0.26)',
-                backgroundColor: isLight ? 'rgba(232,248,241,0.92)' : 'rgba(14,24,20,0.96)'
-              }
-            ]}
-          >
-            <View
+        <FeatureGate flag="tabVoice">
+          <Reveal delayMs={20}>
+            <Pressable
+              onPress={() => navigation.getParent()?.navigate('VoiceTab' as never)}
               style={[
-                styles.voiceShortcutIcon,
+                styles.voiceShortcutCard,
                 {
-                  backgroundColor: isLight ? 'rgba(40,179,130,0.13)' : 'rgba(111,168,138,0.14)'
+                  borderColor: isLight ? 'rgba(40,179,130,0.30)' : 'rgba(111,168,138,0.26)',
+                  backgroundColor: isLight ? 'rgba(232,248,241,0.92)' : 'rgba(14,24,20,0.96)'
                 }
               ]}
             >
-              <Feather name="mic" size={16} color={isLight ? '#1e7253' : '#cfe4d8'} />
-            </View>
-            <View style={styles.voiceShortcutCopy}>
-              <AppText style={[styles.voiceShortcutTitle, { color: colors.text1 }]}>
-                Asistente por voz premium
-              </AppText>
-              <AppText style={[styles.voiceShortcutBody, { color: colors.text2 }]}>
-                Busca y agrega orgánicos diciendo “Hey GreenCart”.
-              </AppText>
-            </View>
-            <Feather name="chevron-right" size={16} color={colors.text2} />
-          </Pressable>
-        </Reveal>
+              <View
+                style={[
+                  styles.voiceShortcutIcon,
+                  {
+                    backgroundColor: isLight ? 'rgba(40,179,130,0.13)' : 'rgba(111,168,138,0.14)'
+                  }
+                ]}
+              >
+                <Feather name="mic" size={16} color={isLight ? '#1e7253' : '#cfe4d8'} />
+              </View>
+              <View style={styles.voiceShortcutCopy}>
+                <AppText style={[styles.voiceShortcutTitle, { color: colors.text1 }]}>
+                  Asistente por voz premium
+                </AppText>
+                <AppText style={[styles.voiceShortcutBody, { color: colors.text2 }]}>
+                  Busca y agrega orgánicos diciendo “Hey GreenCart”.
+                </AppText>
+              </View>
+              <Feather name="chevron-right" size={16} color={colors.text2} />
+            </Pressable>
+          </Reveal>
+        </FeatureGate>
 
         <Animated.View style={heroScrollStyle}>
           <ImageBackground source={toCachedImageSource(HERO_IMAGE)} style={styles.hero} imageStyle={styles.heroImage}>

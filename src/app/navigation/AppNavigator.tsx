@@ -12,11 +12,19 @@ import { useAuthStore } from '../../state/authStore';
 import { useTheme } from '../../shared/theme/useTheme';
 import { HamburgerDrawer, HamburgerDrawerProvider } from './HamburgerDrawer';
 import { navigationRef } from './navigationRef';
+import { isFeatureEnabled } from '../../shared/feature-flags/featureFlags';
+import { FeatureDisabledScreen } from '../../shared/ui/FeatureDisabledScreen';
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const MainFlowStack = createNativeStackNavigator<MainFlowStackParamList>();
 
 function AppShellNavigator() {
+  const drawerEnabled = isFeatureEnabled('drawer');
+
+  if (!drawerEnabled) {
+    return <MainTabs />;
+  }
+
   return (
     <HamburgerDrawerProvider>
       <MainTabs />
@@ -28,16 +36,34 @@ function AppShellNavigator() {
 function MainFlowNavigator() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const requiresAddressOnboarding = useAuthStore((s) => s.requiresAddressOnboarding);
+  const authEnabled = isFeatureEnabled('auth');
+  const onboardingEnabled = isFeatureEnabled('onboarding');
 
   return (
     <MainFlowStack.Navigator screenOptions={{ headerShown: false }}>
       {!isAuthenticated ? (
-        <MainFlowStack.Screen name="Auth" component={AuthStackNavigator} />
+        authEnabled ? (
+          <MainFlowStack.Screen name="Auth" component={AuthStackNavigator} />
+        ) : (
+          <MainFlowStack.Screen
+            name="Auth"
+            component={() => (
+              <FeatureDisabledScreen
+                title="Autenticacion desactivada"
+                description="Activa EXPO_PUBLIC_FF_AUTH para habilitar login y registro."
+              />
+            )}
+          />
+        )
       ) : requiresAddressOnboarding ? (
-        <MainFlowStack.Screen
-          name="Onboarding"
-          component={OnboardingStackNavigator}
-        />
+        onboardingEnabled ? (
+          <MainFlowStack.Screen
+            name="Onboarding"
+            component={OnboardingStackNavigator}
+          />
+        ) : (
+          <MainFlowStack.Screen name="App" component={AppShellNavigator} />
+        )
       ) : (
         <MainFlowStack.Screen name="App" component={AppShellNavigator} />
       )}

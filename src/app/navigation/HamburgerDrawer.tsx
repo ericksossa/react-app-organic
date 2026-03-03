@@ -26,6 +26,7 @@ import { useTheme } from '../../shared/theme/useTheme';
 import { AppText } from '../../shared/ui/AppText';
 import { useAuthStore } from '../../state/authStore';
 import { navigationRef } from './navigationRef';
+import { isFeatureEnabled } from '../../shared/feature-flags/featureFlags';
 
 type HamburgerDrawerContextValue = {
   isOpen: boolean;
@@ -270,6 +271,9 @@ export function HamburgerDrawer() {
   const version = Constants.expoConfig?.version ?? '0.1.0';
   const drawerBackground = isDark ? '#0f1b17' : '#f2faf5';
   const drawerBorder = isDark ? 'rgba(191,233,209,0.20)' : 'rgba(25,82,58,0.18)';
+  const ordersEnabled = isFeatureEnabled('orders');
+  const tabCatalogEnabled = isFeatureEnabled('tabCatalog');
+  const tabVoiceEnabled = isFeatureEnabled('tabVoice');
 
   return (
     <>
@@ -337,20 +341,24 @@ export function HamburgerDrawer() {
                   accessibilityLabel={isAuthenticated ? 'Abrir perfil' : 'Ir a iniciar sesion'}
                   isDark={isDark}
                 />
-                <DrawerItem
-                  icon="shopping-bag"
-                  label="Mis pedidos"
-                  onPress={() => goToNested('HomeTab', 'OrdersMain')}
-                  accessibilityLabel="Abrir mis pedidos"
-                  isDark={isDark}
-                />
-                <DrawerItem
-                  icon="heart"
-                  label="Favoritos"
-                  onPress={() => goToNested('CatalogTab', 'CatalogMain')}
-                  accessibilityLabel="Abrir favoritos"
-                  isDark={isDark}
-                />
+                {ordersEnabled ? (
+                  <DrawerItem
+                    icon="shopping-bag"
+                    label="Mis pedidos"
+                    onPress={() => goToNested('HomeTab', 'OrdersMain')}
+                    accessibilityLabel="Abrir mis pedidos"
+                    isDark={isDark}
+                  />
+                ) : null}
+                {tabCatalogEnabled ? (
+                  <DrawerItem
+                    icon="heart"
+                    label="Favoritos"
+                    onPress={() => goToNested('CatalogTab', 'CatalogMain')}
+                    accessibilityLabel="Abrir favoritos"
+                    isDark={isDark}
+                  />
+                ) : null}
               </View>
 
               <SectionDivider />
@@ -376,40 +384,48 @@ export function HamburgerDrawer() {
                   accessibilityLabel="Compartir GreenCart"
                   isDark={isDark}
                 />
-                <DrawerItem
-                  icon="bookmark"
-                  label="Guardados / Wishlist"
-                  onPress={() => goToNested('CatalogTab', 'CatalogMain')}
-                  accessibilityLabel="Abrir guardados"
-                  isDark={isDark}
-                />
+                {tabCatalogEnabled ? (
+                  <DrawerItem
+                    icon="bookmark"
+                    label="Guardados / Wishlist"
+                    onPress={() => goToNested('CatalogTab', 'CatalogMain')}
+                    accessibilityLabel="Abrir guardados"
+                    isDark={isDark}
+                  />
+                ) : null}
               </View>
 
               <SectionDivider />
 
               <View style={styles.section}>
                 <AppText style={[styles.sectionTitle, { color: isDark ? '#a8c8ba' : '#2a5a46' }]}>Navegacion rapida</AppText>
-                <DrawerItem
-                  icon="search"
-                  label="Buscar productos"
-                  onPress={() => goToNested('CatalogTab', 'CatalogMain')}
-                  accessibilityLabel="Buscar productos"
-                  isDark={isDark}
-                />
-                <DrawerItem
-                  icon="grid"
-                  label="Explorar categorias"
-                  onPress={() => goToNested('CatalogTab', 'CatalogMain')}
-                  accessibilityLabel="Explorar categorias"
-                  isDark={isDark}
-                />
-                <DrawerItem
-                  icon="mic"
-                  label="Asistente por voz"
-                  onPress={() => goToNested('VoiceTab', 'VoiceMain')}
-                  accessibilityLabel="Abrir asistente por voz"
-                  isDark={isDark}
-                />
+                {tabCatalogEnabled ? (
+                  <DrawerItem
+                    icon="search"
+                    label="Buscar productos"
+                    onPress={() => goToNested('CatalogTab', 'CatalogMain')}
+                    accessibilityLabel="Buscar productos"
+                    isDark={isDark}
+                  />
+                ) : null}
+                {tabCatalogEnabled ? (
+                  <DrawerItem
+                    icon="grid"
+                    label="Explorar categorias"
+                    onPress={() => goToNested('CatalogTab', 'CatalogMain')}
+                    accessibilityLabel="Explorar categorias"
+                    isDark={isDark}
+                  />
+                ) : null}
+                {tabVoiceEnabled ? (
+                  <DrawerItem
+                    icon="mic"
+                    label="Asistente por voz"
+                    onPress={() => goToNested('VoiceTab', 'VoiceMain')}
+                    accessibilityLabel="Abrir asistente por voz"
+                    isDark={isDark}
+                  />
+                ) : null}
               </View>
 
               <SectionDivider />

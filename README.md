@@ -21,6 +21,47 @@ npm run ios
 npm run android
 ```
 
+## Feature Flags (env)
+- Todas las flags se controlan por variables `EXPO_PUBLIC_FF_*` en `.env`.
+- Valores soportados: `1/0`, `true/false`, `on/off`.
+- Flags principales:
+  - `EXPO_PUBLIC_FF_TAB_HOME`
+  - `EXPO_PUBLIC_FF_TAB_CATALOG`
+  - `EXPO_PUBLIC_FF_TAB_VOICE`
+  - `EXPO_PUBLIC_FF_TAB_CART`
+  - `EXPO_PUBLIC_FF_DRAWER`
+  - `EXPO_PUBLIC_FF_AUTH`
+  - `EXPO_PUBLIC_FF_ONBOARDING`
+  - `EXPO_PUBLIC_FF_ORDERS`
+  - `EXPO_PUBLIC_FF_CHECKOUT`
+  - `EXPO_PUBLIC_FF_PRODUCT_DETAIL`
+
+### Matriz recomendada por entorno
+| Flag | development | preview | production |
+|---|---:|---:|---:|
+| `EXPO_PUBLIC_FF_TAB_HOME` | 1 | 1 | 1 |
+| `EXPO_PUBLIC_FF_TAB_CATALOG` | 1 | 1 | 1 |
+| `EXPO_PUBLIC_FF_TAB_VOICE` | 1 | 1 | 1 |
+| `EXPO_PUBLIC_FF_TAB_CART` | 1 | 1 | 1 |
+| `EXPO_PUBLIC_FF_DRAWER` | 1 | 1 | 1 |
+| `EXPO_PUBLIC_FF_AUTH` | 1 | 1 | 1 |
+| `EXPO_PUBLIC_FF_ONBOARDING` | 1 | 1 | 1 |
+| `EXPO_PUBLIC_FF_ORDERS` | 1 | 1 | 1 |
+| `EXPO_PUBLIC_FF_CHECKOUT` | 1 | 1 | 1 |
+| `EXPO_PUBLIC_FF_PRODUCT_DETAIL` | 1 | 1 | 1 |
+
+### Plantillas de entorno listas
+- `.env.development.example`
+- `.env.preview.example`
+- `.env.production.example`
+
+Uso sugerido:
+```bash
+cp .env.preview.example .env
+```
+
+Para rollback rápido de una funcionalidad en producción, cambia solo una flag a `0` (por ejemplo `EXPO_PUBLIC_FF_TAB_VOICE=0`) y despliega.
+
 ## Estructura
 - `src/app/navigation`: root/auth/tabs/stacks
 - `src/features`: modulos por feature
