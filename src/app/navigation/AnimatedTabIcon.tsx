@@ -19,6 +19,7 @@ type Props = {
   icon: IconName;
   activeColor: string;
   inactiveColor: string;
+  badgeCount?: number;
 };
 
 export function AnimatedTabIcon({
@@ -26,7 +27,8 @@ export function AnimatedTabIcon({
   label,
   icon,
   activeColor,
-  inactiveColor
+  inactiveColor,
+  badgeCount = 0
 }: Props) {
   const reduceMotion = useReducedMotionSetting();
   const progress = useSharedValue(focused ? 1 : 0);
@@ -53,6 +55,8 @@ export function AnimatedTabIcon({
   }));
 
   const tone = focused ? activeColor : inactiveColor;
+  const showBadge = icon === 'cart' && badgeCount > 0;
+  const badgeLabel = badgeCount > 99 ? '99+' : String(Math.trunc(badgeCount));
 
   return (
     <View style={styles.pressable}>
@@ -67,6 +71,11 @@ export function AnimatedTabIcon({
         <Animated.View style={[styles.iconCenter, iconStyle]}>
           <TabGlyph icon={icon} color={tone} size={22} focused={focused} />
         </Animated.View>
+        {showBadge ? (
+          <View style={styles.badge} accessibilityLabel={`Productos en canasta: ${badgeLabel}`}>
+            <AppText style={styles.badgeText}>{badgeLabel}</AppText>
+          </View>
+        ) : null}
       </View>
       <Animated.View style={labelStyle}>
         <AppText style={[styles.label, { color: tone }]}>{label}</AppText>
@@ -141,6 +150,26 @@ const styles = StyleSheet.create({
   iconCenter: {
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  badge: {
+    position: 'absolute',
+    top: 3,
+    right: 2,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    backgroundColor: '#E75555',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#FFFFFF'
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+    lineHeight: 12
   },
   label: {
     marginTop: 1,

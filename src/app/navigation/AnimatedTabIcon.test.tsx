@@ -40,4 +40,19 @@ describe('AnimatedTabIcon', () => {
 
     expect(getByText(`tab-${icon}`)).toBeTruthy();
   });
+
+  it('renders badge count for cart tab', () => {
+    const { getByText } = render(
+      <AnimatedTabIcon
+        focused={false}
+        label="Canasta"
+        icon="cart"
+        activeColor="#111"
+        inactiveColor="#666"
+        badgeCount={4}
+      />
+    );
+
+    expect(getByText('4')).toBeTruthy();
+  });
 });

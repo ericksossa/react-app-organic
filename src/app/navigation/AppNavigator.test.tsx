@@ -19,6 +19,11 @@ jest.mock('../../features/onboarding/screens/OnboardingScreen', () => ({ Onboard
 jest.mock('./AuthStackNavigator', () => ({ AuthStackNavigator: () => null }));
 jest.mock('./MainTabs', () => ({ MainTabs: () => null }));
 jest.mock('./OnboardingStackNavigator', () => ({ OnboardingStackNavigator: () => null }));
+jest.mock('./HamburgerDrawer', () => ({
+  HamburgerDrawer: () => null,
+  HamburgerDrawerProvider: ({ children }: any) => children
+}));
+jest.mock('./navigationRef', () => ({ navigationRef: { isReady: () => true } }));
 
 jest.mock('@react-navigation/native', () => ({
   DarkTheme: { colors: { background: '#000', card: '#111', text: '#fff', border: '#333', primary: '#0f0', notification: '#0f0' } },

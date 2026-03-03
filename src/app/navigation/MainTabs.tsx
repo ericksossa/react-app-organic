@@ -13,6 +13,7 @@ import { VoiceStackNavigator } from './VoiceStackNavigator';
 import { useTheme } from '../../shared/theme/useTheme';
 import { AnimatedTabIcon } from './AnimatedTabIcon';
 import { withTabSceneTransition } from './withTabSceneTransition';
+import { useCartStore } from '../../state/cartStore';
 
 const Tab = createBottomTabNavigator<AppTabsParamList>();
 
@@ -25,6 +26,17 @@ const CartScene = withTabSceneTransition(CartStackNavigator);
 export function MainTabs() {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const cartBadgeCount = useCartStore((s) =>
+    (s.snapshot?.items ?? []).reduce((sum, item) => {
+      const qty = Number.isFinite(item.qty) ? item.qty : 0;
+      return sum + Math.max(0, Math.trunc(qty));
+    }, 0)
+  );
+  const loadCart = useCartStore((s) => s.load);
+
+  React.useEffect(() => {
+    void loadCart();
+  }, [loadCart]);
 
   const tabBarHeight = TAB_BAR_BASE_HEIGHT + insets.bottom;
   const tabBackground = isDark ? '#060A08' : '#FFFFFF';
@@ -114,6 +126,7 @@ export function MainTabs() {
               icon="cart"
               activeColor={activeTone}
               inactiveColor={inactiveTone}
+              badgeCount={cartBadgeCount}
             />
           )
         }}

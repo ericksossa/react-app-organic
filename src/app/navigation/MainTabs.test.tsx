@@ -1,5 +1,6 @@
 const mockUseTheme = jest.fn();
 const mockUseSafeAreaInsets = jest.fn();
+const mockUseCartStore = jest.fn();
 const iconRenderProps: any[] = [];
 const screenCalls: Array<any> = [];
 let navigatorProps: any = null;
@@ -10,6 +11,10 @@ jest.mock('../../shared/theme/useTheme', () => ({
 
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => mockUseSafeAreaInsets()
+}));
+
+jest.mock('../../state/cartStore', () => ({
+  useCartStore: (selector: any) => mockUseCartStore(selector)
 }));
 
 jest.mock('./AnimatedTabIcon', () => ({
@@ -61,6 +66,16 @@ describe('MainTabs', () => {
       isDark: true,
       colors: { surface1: '#111', border1: '#222', text1: '#fff', text2: '#aaa' }
     });
+    const cartState = {
+      snapshot: {
+        items: [
+          { id: 'i1', qty: 2 },
+          { id: 'i2', qty: 1 }
+        ]
+      },
+      load: jest.fn()
+    };
+    mockUseCartStore.mockImplementation((selector: any) => selector(cartState));
   });
 
   it('configures tab navigator and localized labels', () => {
@@ -90,5 +105,12 @@ describe('MainTabs', () => {
     expect(firstIconCall.activeColor).toBe('#0B1712');
     expect(firstIconCall.inactiveColor).toBe('rgba(16,24,20,0.62)');
     expect(navigatorProps.screenOptions.tabBarStyle.backgroundColor).toBe('#FFFFFF');
+  });
+
+  it('passes cart badge count to canasta tab icon', () => {
+    render(<MainTabs />);
+
+    const cartIconCall = [...iconRenderProps].reverse().find((props) => props.icon === 'cart');
+    expect(cartIconCall.badgeCount).toBe(3);
   });
 });

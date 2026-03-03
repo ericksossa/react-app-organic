@@ -10,9 +10,20 @@ import { OnboardingScreen } from '../../features/onboarding/screens/OnboardingSc
 import { linking } from './linking';
 import { useAuthStore } from '../../state/authStore';
 import { useTheme } from '../../shared/theme/useTheme';
+import { HamburgerDrawer, HamburgerDrawerProvider } from './HamburgerDrawer';
+import { navigationRef } from './navigationRef';
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const MainFlowStack = createNativeStackNavigator<MainFlowStackParamList>();
+
+function AppShellNavigator() {
+  return (
+    <HamburgerDrawerProvider>
+      <MainTabs />
+      <HamburgerDrawer />
+    </HamburgerDrawerProvider>
+  );
+}
 
 function MainFlowNavigator() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -28,7 +39,7 @@ function MainFlowNavigator() {
           component={OnboardingStackNavigator}
         />
       ) : (
-        <MainFlowStack.Screen name="App" component={MainTabs} />
+        <MainFlowStack.Screen name="App" component={AppShellNavigator} />
       )}
     </MainFlowStack.Navigator>
   );
@@ -60,7 +71,7 @@ export function AppNavigator() {
   }
 
   return (
-    <NavigationContainer linking={linking} theme={navigationTheme}>
+    <NavigationContainer ref={navigationRef} linking={linking} theme={navigationTheme}>
       <RootStack.Navigator
         initialRouteName="IntroOnboarding"
         screenOptions={{ headerShown: false }}

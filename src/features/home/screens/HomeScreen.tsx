@@ -2,6 +2,7 @@ import React from 'react';
 import {
   Image,
   ImageBackground,
+  Keyboard,
   NativeSyntheticEvent,
   Platform,
   Pressable,
@@ -29,7 +30,6 @@ import Animated, {
 import { AppButton } from '../../../shared/ui/AppButton';
 import { AppText } from '../../../shared/ui/AppText';
 import { HomeStackParamList } from '../../../app/navigation/types';
-import { useAuthStore } from '../../../state/authStore';
 import { useAvailabilityStore } from '../../../state/availabilityStore';
 import { toCachedImageSource } from '../../../shared/utils/media';
 import { useTheme } from '../../../shared/theme/useTheme';
@@ -39,6 +39,7 @@ import { brandMicrocopy, getZoneDeliveryMicrocopy } from '../../../shared/copy/b
 import { getCatalog } from '../../../services/api/catalogApi';
 import { useReducedMotionSetting } from '../../../design/motion/useReducedMotionSetting';
 import { Reveal } from '../../../design/motion/Reveal';
+import { useHamburgerDrawer } from '../../../app/navigation/HamburgerDrawer';
 
 const HERO_IMAGE =
   'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=1400&q=80';
@@ -107,25 +108,6 @@ type HomeSearchMemory = {
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'HomeMain'>;
 
-type TopIconName = 'sun' | 'moon' | 'bookmark' | 'share' | 'search' | 'exit';
-
-function TopActionIcon({ name, color }: { name: TopIconName; color: string }) {
-  const iconName: React.ComponentProps<typeof Feather>['name'] =
-    name === 'sun'
-      ? 'sun'
-      : name === 'moon'
-        ? 'moon'
-        : name === 'bookmark'
-          ? 'bookmark'
-          : name === 'share'
-            ? 'share-2'
-            : name === 'search'
-              ? 'search'
-              : 'log-out';
-
-  return <Feather name={iconName} color={color} size={21} />;
-}
-
 function ScrollRevealCard({
   index,
   scrollY,
@@ -178,13 +160,12 @@ function ScrollRevealCard({
 }
 
 export function HomeScreen({ navigation }: Props) {
-  const logout = useAuthStore((s) => s.logout);
   const selectedZoneId = useAvailabilityStore((s) => s.selectedZoneId);
   const selectedZone = useAvailabilityStore((s) => s.selectedZone);
-  const { mode, toggleMode, colors } = useTheme();
+  const { mode, colors } = useTheme();
+  const { openDrawer } = useHamburgerDrawer();
   const reduceMotion = useReducedMotionSetting();
   const isLight = mode === 'light';
-  const actionColor = isLight ? '#1f2421' : '#f2f6f4';
   const [searchQuery, setSearchQuery] = React.useState('');
   const [isSearchVisible, setIsSearchVisible] = React.useState(false);
   const [isSearchFocused, setIsSearchFocused] = React.useState(false);
@@ -256,15 +237,6 @@ export function HomeScreen({ navigation }: Props) {
     },
     [navigation, normalizeSuggestionText, persistSearchMemory, upsertRecentSuggestion]
   );
-
-  const activateHomeSearch = React.useCallback(() => {
-    setIsSearchVisible(true);
-    setIsSearchFocused(true);
-    scrollRef.current?.scrollTo({ y: 0, animated: true });
-    requestAnimationFrame(() => {
-      searchInputRef.current?.focus();
-    });
-  }, []);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -395,24 +367,21 @@ export function HomeScreen({ navigation }: Props) {
         onMomentumScrollEnd={onHomeScrollEnd}
       >
         <Animated.View style={[styles.topBar, { borderBottomColor: colors.border1 }, topBarScrollStyle]}>
-          <AppText style={[styles.brand, { color: colors.text1 }]}>GreenCart</AppText>
-          <View style={styles.topActions}>
-            <Pressable style={styles.iconButton} onPress={() => toggleMode()}>
-              <TopActionIcon name={isLight ? 'moon' : 'sun'} color={actionColor} />
-            </Pressable>
-            <Pressable style={styles.iconButton}>
-              <TopActionIcon name="bookmark" color={actionColor} />
-            </Pressable>
-            <Pressable style={styles.iconButton}>
-              <TopActionIcon name="share" color={actionColor} />
-            </Pressable>
-            <Pressable style={styles.iconButton} onPress={activateHomeSearch}>
-              <TopActionIcon name="search" color={actionColor} />
-            </Pressable>
-            <Pressable style={styles.iconButton} onPress={() => logout()}>
-              <TopActionIcon name="exit" color={actionColor} />
-            </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Abrir menu principal"
+            style={styles.iconButton}
+            onPress={() => {
+              Keyboard.dismiss();
+              openDrawer();
+            }}
+          >
+            <Feather name="menu" size={22} color={isLight ? '#1f2421' : '#f2f6f4'} />
+          </Pressable>
+          <View style={styles.topBarCenter}>
+            <AppText style={[styles.brand, { color: colors.text1 }]}>GreenCart</AppText>
           </View>
+          <View style={styles.topBarRightSpacer} />
         </Animated.View>
 
         {isSearchVisible ? (
@@ -695,21 +664,24 @@ const styles = StyleSheet.create({
     height: 62,
     paddingHorizontal: 6,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.06)'
+  },
+  topBarCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  topBarRightSpacer: {
+    width: 30,
+    height: 30
   },
   brand: {
     fontSize: 16,
     fontWeight: '800',
     letterSpacing: 0.2,
     color: '#f2f6f4'
-  },
-  topActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10
   },
   iconButton: {
     width: 30,
@@ -756,156 +728,6 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 11,
     paddingVertical: 7
-  },
-  sunCore: {
-    position: 'absolute',
-    top: 6,
-    left: 6,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    borderWidth: 1.4,
-    borderColor: '#f1f4f2'
-  },
-  sunRay: {
-    position: 'absolute',
-    backgroundColor: '#f1f4f2'
-  },
-  sunRayTop: {
-    top: 1,
-    left: 8.4,
-    width: 1.2,
-    height: 3
-  },
-  sunRayBottom: {
-    top: 14,
-    left: 8.4,
-    width: 1.2,
-    height: 3
-  },
-  sunRayLeft: {
-    top: 8.4,
-    left: 1,
-    width: 3,
-    height: 1.2
-  },
-  sunRayRight: {
-    top: 8.4,
-    right: 1,
-    width: 3,
-    height: 1.2
-  },
-  bookmarkBody: {
-    position: 'absolute',
-    top: 2,
-    left: 5,
-    width: 8,
-    height: 12,
-    borderWidth: 1.4,
-    borderColor: '#f1f4f2',
-    borderRadius: 1.5
-  },
-  bookmarkCut: {
-    position: 'absolute',
-    left: 7.1,
-    top: 10.1,
-    width: 3.8,
-    height: 3.8,
-    backgroundColor: '#040907',
-    transform: [{ rotate: '45deg' }]
-  },
-  shareShaft: {
-    position: 'absolute',
-    left: 8.4,
-    top: 3.4,
-    width: 1.2,
-    height: 8.6,
-    backgroundColor: '#f1f4f2'
-  },
-  shareHeadL: {
-    position: 'absolute',
-    left: 5.6,
-    top: 3.2,
-    width: 1.2,
-    height: 4.2,
-    backgroundColor: '#f1f4f2',
-    transform: [{ rotate: '45deg' }]
-  },
-  shareHeadR: {
-    position: 'absolute',
-    left: 11.2,
-    top: 3.2,
-    width: 1.2,
-    height: 4.2,
-    backgroundColor: '#f1f4f2',
-    transform: [{ rotate: '-45deg' }]
-  },
-  shareBase: {
-    position: 'absolute',
-    left: 4.5,
-    top: 11.8,
-    width: 9,
-    height: 4.5,
-    borderWidth: 1.4,
-    borderTopWidth: 0,
-    borderColor: '#f1f4f2',
-    borderRadius: 1.5
-  },
-  searchRing: {
-    position: 'absolute',
-    left: 3,
-    top: 3,
-    width: 9,
-    height: 9,
-    borderRadius: 4.5,
-    borderWidth: 1.4,
-    borderColor: '#f1f4f2'
-  },
-  searchHandle: {
-    position: 'absolute',
-    left: 11.5,
-    top: 11.2,
-    width: 5,
-    height: 1.2,
-    backgroundColor: '#f1f4f2',
-    transform: [{ rotate: '45deg' }]
-  },
-  exitDoor: {
-    position: 'absolute',
-    left: 2,
-    top: 3,
-    width: 6,
-    height: 12,
-    borderWidth: 1.4,
-    borderRightWidth: 0,
-    borderColor: '#f1f4f2',
-    borderRadius: 1.5
-  },
-  exitShaft: {
-    position: 'absolute',
-    left: 7.4,
-    top: 8.4,
-    width: 8,
-    height: 1.2,
-    backgroundColor: '#f1f4f2'
-  },
-  exitHeadUp: {
-    position: 'absolute',
-    left: 12.1,
-    top: 6.2,
-    width: 1.2,
-    height: 4.1,
-    backgroundColor: '#f1f4f2',
-    transform: [{ rotate: '-45deg' }]
-  },
-  exitHeadDown: {
-    position: 'absolute',
-    left: 12.1,
-    top: 8.3,
-    width: 1.2,
-    height: 4.1,
-    backgroundColor: '#f1f4f2',
-    transform: [{ rotate: '45deg' }]
   },
   voiceShortcutCard: {
     marginTop: 4,

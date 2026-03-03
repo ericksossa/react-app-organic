@@ -50,10 +50,25 @@ export const useCartStore = create<CartState>((set, get) => ({
   },
 
   addItem: async ({ variantId, qty, note }) => {
+    const selectedZoneId = useAvailabilityStore.getState().selectedZoneId;
+    const currentZoneId = get().snapshot?.zoneId ?? null;
+    const safeQty = Number.isFinite(qty) && qty > 0 ? Number(qty) : 1;
+
     try {
-      await addCartItem({ variantId, qty, note });
-      const refreshed = await getActiveCart();
-      set({ snapshot: refreshed, error: null });
+      // Swagger AddCartItemDto requires { variantId, qty }, and cart zone may need to be aligned first.
+      if (selectedZoneId && selectedZoneId !== currentZoneId) {
+        await setCartZone(selectedZoneId);
+      }
+
+      await addCartItem({ variantId, qty: safeQty, note });
+
+      try {
+        const refreshed = await getActiveCart();
+        set({ snapshot: refreshed, error: null });
+      } catch {
+        // If add succeeded but refresh failed, avoid surfacing a false add failure.
+        set({ error: null });
+      }
     } catch (error) {
       set({ error: getErrorMessage(error, brandMicrocopy.errors.cartAdd) });
       throw new Error('add_item_failed');

@@ -35,6 +35,15 @@ jest.mock('../../../services/api/catalogApi', () => ({
   getCatalog: (...args: any[]) => mockGetCatalog(...args)
 }));
 
+jest.mock('../../../app/navigation/HamburgerDrawer', () => ({
+  useHamburgerDrawer: () => ({
+    isOpen: false,
+    openDrawer: jest.fn(),
+    closeDrawer: jest.fn(),
+    toggleDrawer: jest.fn()
+  })
+}));
+
 jest.mock('../../../shared/utils/media', () => ({
   toCachedImageSource: (uri: string) => ({ uri })
 }));
