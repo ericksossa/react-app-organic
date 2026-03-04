@@ -27,6 +27,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue
 } from 'react-native-reanimated';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { AppButton } from '../../../shared/ui/AppButton';
 import { AppText } from '../../../shared/ui/AppText';
 import { HomeStackParamList } from '../../../app/navigation/types';
@@ -42,8 +43,7 @@ import { Reveal } from '../../../design/motion/Reveal';
 import { useHamburgerDrawer } from '../../../app/navigation/HamburgerDrawer';
 import { FeatureGate } from '../../../shared/feature-flags/FeatureGate';
 
-const HERO_IMAGE =
-  'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=1400&q=80';
+const HERO_VIDEO = require('../../../../assets/videos/agricultor.mp4');
 
 const CATEGORY_IMAGES = [
   'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=400&q=80',
@@ -177,6 +177,11 @@ export function HomeScreen({ navigation }: Props) {
   const scrollY = useSharedValue(0);
   const lastSnapTargetRef = React.useRef<number | null>(null);
   const snapTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const heroPlayer = useVideoPlayer(HERO_VIDEO, (player) => {
+    player.loop = true;
+    player.muted = true;
+    player.play();
+  });
 
   const normalizeSuggestionText = React.useCallback((value: string) => {
     return value.replace(/^[^\s]+\s/, '').trim();
@@ -529,7 +534,14 @@ export function HomeScreen({ navigation }: Props) {
         </FeatureGate>
 
         <Animated.View style={heroScrollStyle}>
-          <ImageBackground source={toCachedImageSource(HERO_IMAGE)} style={styles.hero} imageStyle={styles.heroImage}>
+          <View style={styles.hero}>
+            <VideoView
+              player={heroPlayer}
+              style={StyleSheet.absoluteFillObject}
+              contentFit="cover"
+              nativeControls={false}
+              allowsFullscreen={false}
+            />
             <View style={styles.heroOverlay} />
             <View style={styles.heroContent}>
               <AppText style={styles.zonePill}>{getZoneDeliveryMicrocopy(selectedZone?.name)}</AppText>
@@ -545,7 +557,7 @@ export function HomeScreen({ navigation }: Props) {
                 style={styles.heroCta}
               />
             </View>
-          </ImageBackground>
+          </View>
         </Animated.View>
 
         <ScrollRevealCard index={1} scrollY={scrollY}>
