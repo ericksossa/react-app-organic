@@ -10,26 +10,26 @@
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		1614C4DCA298427A007A4F1A /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B668E0793E2CD3E880C94AA5 /* PrivacyInfo.xcprivacy */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		4B66A79D14FF83CE701B2B56 /* libPods-organicAppRN.a in Frameworks */ = {isa = PBXBuildFile; fileRef = F9D0378E12B1DD273AD94DBC /* libPods-organicAppRN.a */; };
 		6FE6917930299283D924812D /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B12DBCC861593929B23F577 /* ExpoModulesProvider.swift */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
+		F53D6B6B972D4C76558DA7F1 /* libPods-organicAppRN.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 8AB1CFFF3CEA3ACF9022DB8E /* libPods-organicAppRN.a */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		13B07F961A680F5B00A75B9A /* organicAppRN.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = organicAppRN.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = organicAppRN/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = organicAppRN/Info.plist; sourceTree = "<group>"; };
+		8AB1CFFF3CEA3ACF9022DB8E /* libPods-organicAppRN.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-organicAppRN.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		8B12DBCC861593929B23F577 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-organicAppRN/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = organicAppRN/SplashScreen.storyboard; sourceTree = "<group>"; };
 		B668E0793E2CD3E880C94AA5 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = organicAppRN/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
+		E0EA2E8C2D3F51189E7E47D3 /* Pods-organicAppRN.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-organicAppRN.debug.xcconfig"; path = "Target Support Files/Pods-organicAppRN/Pods-organicAppRN.debug.xcconfig"; sourceTree = "<group>"; };
+		E2E45C5ACE6055CBA603D494 /* Pods-organicAppRN.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-organicAppRN.release.xcconfig"; path = "Target Support Files/Pods-organicAppRN/Pods-organicAppRN.release.xcconfig"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = organicAppRN/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* organicAppRN-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "organicAppRN-Bridging-Header.h"; path = "organicAppRN/organicAppRN-Bridging-Header.h"; sourceTree = "<group>"; };
-		F7EE7E8F1424DF00DAFF5C9B /* Pods-organicAppRN.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-organicAppRN.release.xcconfig"; path = "Target Support Files/Pods-organicAppRN/Pods-organicAppRN.release.xcconfig"; sourceTree = "<group>"; };
-		F894C9D8683BDB43607A743C /* Pods-organicAppRN.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-organicAppRN.debug.xcconfig"; path = "Target Support Files/Pods-organicAppRN/Pods-organicAppRN.debug.xcconfig"; sourceTree = "<group>"; };
-		F9D0378E12B1DD273AD94DBC /* libPods-organicAppRN.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-organicAppRN.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -37,7 +37,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				4B66A79D14FF83CE701B2B56 /* libPods-organicAppRN.a in Frameworks */,
+				F53D6B6B972D4C76558DA7F1 /* libPods-organicAppRN.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -62,7 +62,7 @@
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				F9D0378E12B1DD273AD94DBC /* libPods-organicAppRN.a */,
+				8AB1CFFF3CEA3ACF9022DB8E /* libPods-organicAppRN.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -125,8 +125,8 @@
 		F86D89C173CC2752CB6375EF /* Pods */ = {
 			isa = PBXGroup;
 			children = (
-				F894C9D8683BDB43607A743C /* Pods-organicAppRN.debug.xcconfig */,
-				F7EE7E8F1424DF00DAFF5C9B /* Pods-organicAppRN.release.xcconfig */,
+				E0EA2E8C2D3F51189E7E47D3 /* Pods-organicAppRN.debug.xcconfig */,
+				E2E45C5ACE6055CBA603D494 /* Pods-organicAppRN.release.xcconfig */,
 			);
 			path = Pods;
 			sourceTree = "<group>";
@@ -138,14 +138,14 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "organicAppRN" */;
 			buildPhases = (
-				691C94E75CA40861D2D65501 /* [CP] Check Pods Manifest.lock */,
+				876C55ADA218AE5A3A32F084 /* [CP] Check Pods Manifest.lock */,
 				1C6AD9C04EC870C97F4932D4 /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
-				24F2419B2028E1EB97B6A471 /* [CP] Embed Pods Frameworks */,
-				52CFEE7BEDA3755973B1E46E /* [CP] Copy Pods Resources */,
+				CFEB4CF5C80A824890B4B453 /* [CP] Embed Pods Frameworks */,
+				CABEC8C45912E37A2E1C6D84 /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
 			);
@@ -243,35 +243,29 @@
 			shellPath = /bin/sh;
 			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-organicAppRN/expo-configure-project.sh\"\n";
 		};
-		24F2419B2028E1EB97B6A471 /* [CP] Embed Pods Frameworks */ = {
+		876C55ADA218AE5A3A32F084 /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
-			inputPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-organicAppRN/Pods-organicAppRN-frameworks.sh",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/Cheetah-iOS/PvCheetah.framework/PvCheetah",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/Porcupine-iOS/PvPorcupine.framework/PvPorcupine",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/React-Core-prebuilt/React.framework/React",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ReactNativeDependencies/ReactNativeDependencies.framework/ReactNativeDependencies",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/Rhino-iOS/PvRhino.framework/PvRhino",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermes.framework/hermes",
+			inputFileListPaths = (
 			);
-			name = "[CP] Embed Pods Frameworks";
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
 			outputPaths = (
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/PvCheetah.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/PvPorcupine.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/React.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ReactNativeDependencies.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/PvRhino.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermes.framework",
+				"$(DERIVED_FILE_DIR)/Pods-organicAppRN-checkManifestLockResult.txt",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-organicAppRN/Pods-organicAppRN-frameworks.sh\"\n";
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
-		52CFEE7BEDA3755973B1E46E /* [CP] Copy Pods Resources */ = {
+		CABEC8C45912E37A2E1C6D84 /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -303,26 +297,32 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-organicAppRN/Pods-organicAppRN-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		691C94E75CA40861D2D65501 /* [CP] Check Pods Manifest.lock */ = {
+		CFEB4CF5C80A824890B4B453 /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
-			inputFileListPaths = (
-			);
 			inputPaths = (
-				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
-				"${PODS_ROOT}/Manifest.lock",
+				"${PODS_ROOT}/Target Support Files/Pods-organicAppRN/Pods-organicAppRN-frameworks.sh",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/Cheetah-iOS/PvCheetah.framework/PvCheetah",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/Porcupine-iOS/PvPorcupine.framework/PvPorcupine",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/React-Core-prebuilt/React.framework/React",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ReactNativeDependencies/ReactNativeDependencies.framework/ReactNativeDependencies",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/Rhino-iOS/PvRhino.framework/PvRhino",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermes.framework/hermes",
 			);
-			name = "[CP] Check Pods Manifest.lock";
-			outputFileListPaths = (
-			);
+			name = "[CP] Embed Pods Frameworks";
 			outputPaths = (
-				"$(DERIVED_FILE_DIR)/Pods-organicAppRN-checkManifestLockResult.txt",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/PvCheetah.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/PvPorcupine.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/React.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ReactNativeDependencies.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/PvRhino.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermes.framework",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-organicAppRN/Pods-organicAppRN-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
@@ -342,10 +342,11 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = F894C9D8683BDB43607A743C /* Pods-organicAppRN.debug.xcconfig */;
+			baseConfigurationReference = E0EA2E8C2D3F51189E7E47D3 /* Pods-organicAppRN.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION = YES;
 				CODE_SIGN_ENTITLEMENTS = organicAppRN/organicAppRN.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 99AVNYFW5M;
@@ -379,10 +380,11 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = F7EE7E8F1424DF00DAFF5C9B /* Pods-organicAppRN.release.xcconfig */;
+			baseConfigurationReference = E2E45C5ACE6055CBA603D494 /* Pods-organicAppRN.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION = YES;
 				CODE_SIGN_ENTITLEMENTS = organicAppRN/organicAppRN.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 99AVNYFW5M;

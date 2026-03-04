@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Animated,
   Easing,
   KeyboardAvoidingView,
@@ -15,6 +14,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { Screen } from '../../../shared/ui/Screen';
 import { AppText } from '../../../shared/ui/AppText';
 import { AppButton } from '../../../shared/ui/AppButton';
+import { ZoneListLoadingSkeleton } from '../../../shared/ui/SkeletonPresets';
 import { useTheme } from '../../../shared/theme/useTheme';
 import { createMyAddress } from '../../../services/api/addressesApi';
 import { listDeliveryZones } from '../../../services/api/availabilityApi';
@@ -283,9 +283,9 @@ export function AddressOnboardingScreen() {
                 Elige tu zona de entrega
               </AppText>
               {zonesQuery.isLoading ? (
-                <View style={styles.centerInline}>
-                  <ActivityIndicator color={colors.accent} />
+                <View style={styles.zoneSkeletonWrap}>
                   <AppText style={{ color: colors.text2 }}>Buscando zonas disponibles...</AppText>
+                  <ZoneListLoadingSkeleton />
                 </View>
               ) : null}
               {!city ? <AppText style={{ color: colors.text2 }}>Primero elige tu ciudad para mostrar zonas.</AppText> : null}
@@ -492,9 +492,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     marginTop: 10
   },
-  centerInline: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  zoneSkeletonWrap: {
     gap: 8
   },
   zonesList: {

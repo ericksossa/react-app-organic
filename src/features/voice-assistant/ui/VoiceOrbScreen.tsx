@@ -242,6 +242,8 @@ export function VoiceOrbScreen({
       });
 
       return (
+        response.data.find((item) => item.inStock !== false && normalizeSearchText(item.name) === normalized) ??
+        response.data.find((item) => item.inStock !== false && normalizeSearchText(item.name).includes(normalized)) ??
         response.data.find((item) => normalizeSearchText(item.name) === normalized) ??
         response.data.find((item) => normalizeSearchText(item.name).includes(normalized)) ??
         response.data[0] ??
@@ -270,6 +272,7 @@ export function VoiceOrbScreen({
       onAddToCart: async ({ query, qty }) => {
         const product = await resolveProduct(query);
         if (!product) return;
+        if (product.inStock === false) return;
 
         let variantId = product.defaultVariantId;
         if (!variantId) {

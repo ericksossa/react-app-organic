@@ -9,6 +9,8 @@ export type CatalogProduct = {
   imageUrl?: string;
   description?: string;
   defaultVariantId?: string;
+  inStock?: boolean;
+  stockQty?: number;
 };
 
 export type CatalogResponse = {
@@ -32,6 +34,7 @@ export type ProductVariant = {
   basePrice?: number | string;
   salePrice?: number | string | null;
   inStock?: boolean;
+  availableQty?: number | string;
 };
 
 export type ProductDetail = {
@@ -40,6 +43,7 @@ export type ProductDetail = {
   slug: string;
   description?: string;
   brand?: string;
+  inStock?: boolean;
   media?: Array<{ url?: string; alt?: string }>;
   variants: ProductVariant[];
 };
@@ -76,11 +80,36 @@ export async function getProductBySlug(slug: string, zoneId?: string): Promise<P
   const payload = (response as { data?: ProductDetail })?.data ?? (response as ProductDetail);
   if (!payload?.id) return null;
 
+  const source = payload as Record<string, unknown>;
+  const normalizedVariants = (payload.variants ?? []).map((variant) => {
+    const variantSource = variant as Record<string, unknown>;
+    const availableQty =
+      asNumber(variantSource.availableQty) ??
+      asNumber(variantSource.available_qty) ??
+      asNumber((variantSource as { stockQty?: unknown }).stockQty);
+    const hasRawInStock = Object.prototype.hasOwnProperty.call(variantSource, 'inStock');
+    const rawInStock = variantSource.inStock;
+    const normalizedInStock =
+      asBoolean(variantSource.inStock) ??
+      asBoolean(variantSource.isAvailable) ??
+      (typeof availableQty === 'number' ? availableQty > 0 : undefined);
+    // Backend may return { inStock: null, availableQty: null } for unavailable variants.
+    const unresolvedStock = (rawInStock == null || !hasRawInStock) && availableQty == null;
+
+    return {
+      ...variant,
+      availableQty: availableQty ?? variant.availableQty,
+      inStock: normalizedInStock ?? (unresolvedStock ? false : variant.inStock)
+    };
+  });
+
   return {
     ...payload,
+    inStock: asBoolean(source.inStock) ?? payload.inStock,
     media: (payload.media ?? [])
       .map((item) => ({ ...item, url: resolveMediaUrl(item.url) }))
-      .filter((item) => Boolean(item.url))
+      .filter((item) => Boolean(item.url)),
+    variants: normalizedVariants
   };
 }
 
@@ -117,8 +146,19 @@ function normalizeProduct(value: unknown, index: number): CatalogProduct {
     asString(row.default_variant_id) ??
     asString(row.variantId) ??
     asString(firstVariant?.id);
+  const stockQty =
+    asNumber(row.stockQty) ??
+    asNumber(row.stock_qty) ??
+    asNumber(row.availableQty) ??
+    asNumber(row.available_qty) ??
+    asNumber(firstVariant?.stockQty);
+  const inStock =
+    asBoolean(row.inStock) ??
+    asBoolean(row.isAvailable) ??
+    asBoolean(firstVariant?.inStock) ??
+    (typeof stockQty === 'number' ? stockQty > 0 : undefined);
 
-  return { id, name, slug, priceFrom, imageUrl, description, defaultVariantId };
+  return { id, name, slug, priceFrom, imageUrl, description, defaultVariantId, inStock, stockQty };
 }
 
 function asString(value: unknown): string | undefined {
@@ -132,6 +172,18 @@ function asNumber(value: unknown): number | undefined {
   if (typeof value === 'string' && value.trim()) {
     const parsed = Number(value);
     if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
+}
+
+function asBoolean(value: unknown): boolean | undefined {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value > 0;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) return undefined;
+    if (['true', '1', 'yes', 'si', 'sí', 'available', 'in_stock'].includes(normalized)) return true;
+    if (['false', '0', 'no', 'unavailable', 'out_of_stock'].includes(normalized)) return false;
   }
   return undefined;
 }

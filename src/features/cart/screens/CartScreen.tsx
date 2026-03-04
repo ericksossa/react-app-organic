@@ -8,6 +8,7 @@ import { AppText } from '../../../shared/ui/AppText';
 import { AppCard } from '../../../shared/ui/AppCard';
 import { AppButton } from '../../../shared/ui/AppButton';
 import { AppIcon } from '../../../shared/ui/AppIcon';
+import { CartLoadingSkeleton } from '../../../shared/ui/SkeletonPresets';
 import { useCartStore } from '../../../state/cartStore';
 import { colors } from '../../../shared/theme/tokens';
 import { CartItem } from '../types';
@@ -116,7 +117,12 @@ export function CartScreen({ navigation }: Props) {
 
   const listHeader = (
     <View style={styles.headerWrap}>
-      {loading ? <AppText>Actualizando tu canasta...</AppText> : null}
+      {loading ? (
+        <View style={styles.loadingWrap}>
+          <AppText>Actualizando tu canasta...</AppText>
+          <CartLoadingSkeleton />
+        </View>
+      ) : null}
       {error ? <AppText style={{ color: themeColors.danger }}>{error}</AppText> : null}
       {!loading && !error && items.length === 0 ? (
         <Reveal delayMs={40}>
@@ -207,6 +213,9 @@ const styles = StyleSheet.create({
   },
   headerWrap: {
     gap: 12
+  },
+  loadingWrap: {
+    gap: 10
   },
   emptyCard: {
     borderRadius: 18,

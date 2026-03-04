@@ -107,6 +107,8 @@ export function VoiceAssistantDock({
       });
 
       return (
+        response.data.find((item) => item.inStock !== false && normalizeSearchText(item.name) === normalized) ??
+        response.data.find((item) => item.inStock !== false && normalizeSearchText(item.name).includes(normalized)) ??
         response.data.find((item) => normalizeSearchText(item.name) === normalized) ??
         response.data.find((item) => normalizeSearchText(item.name).includes(normalized)) ??
         response.data[0] ??
@@ -174,6 +176,10 @@ export function VoiceAssistantDock({
         const product = await resolveProduct(query);
         if (!product) {
           setHint('No encontré ese producto. Intenta otra búsqueda por voz.');
+          return;
+        }
+        if (product.inStock === false) {
+          setHint('Ese producto está sin stock por ahora.');
           return;
         }
 

@@ -6,6 +6,7 @@ import { Screen } from '../../../shared/ui/Screen';
 import { AppText } from '../../../shared/ui/AppText';
 import { AppCard } from '../../../shared/ui/AppCard';
 import { AppButton } from '../../../shared/ui/AppButton';
+import { OrderDetailLoadingSkeleton } from '../../../shared/ui/SkeletonPresets';
 import { colors } from '../../../shared/theme/tokens';
 import { getOrderDetail } from '../../../services/api/ordersApi';
 import { initPayment, PaymentInitResult, PaymentProvider } from '../../../services/api/paymentsApi';
@@ -90,6 +91,7 @@ export function OrderDetailScreen({ route }: Props) {
       {orderQuery.isLoading ? (
         <AppCard style={styles.stateCard}>
           <AppText style={{ color: colors.text2 }}>Cargando tu pedido...</AppText>
+          <OrderDetailLoadingSkeleton />
         </AppCard>
       ) : null}
       {orderQuery.isError ? (

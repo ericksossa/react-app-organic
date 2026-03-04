@@ -62,13 +62,17 @@ export async function getOrderDetail(id: string): Promise<OrderDetail | null> {
 }
 
 function normalizeList(response: unknown): OrdersListResponse {
-  const raw = unwrap(response) as Record<string, unknown> | null;
-  const rows = Array.isArray(raw?.data) ? raw.data : [];
+  const root = asObject(response);
+  const nested = asObject(root?.data);
+  const nestedDeeper = asObject(nested?.data);
+  const raw = hasListShape(nestedDeeper) ? nestedDeeper : hasListShape(nested) ? nested : root;
+  const rows = extractRows(raw);
+  const metaSource = asObject(raw?.meta);
 
   return {
-    page: asNumber(raw?.page) ?? 1,
-    limit: asNumber(raw?.limit) ?? 20,
-    total: asNumber(raw?.total) ?? rows.length,
+    page: asNumber(raw?.page) ?? asNumber(metaSource?.page) ?? 1,
+    limit: asNumber(raw?.limit) ?? asNumber(metaSource?.limit) ?? 20,
+    total: asNumber(raw?.total) ?? asNumber(metaSource?.total) ?? rows.length,
     data: rows.map((item) => normalizeOrder(item)).filter((item): item is OrderDetail => !!item)
   };
 }
@@ -76,23 +80,26 @@ function normalizeList(response: unknown): OrdersListResponse {
 function normalizeOrder(raw: unknown): OrderDetail | null {
   if (!raw || typeof raw !== 'object') return null;
   const data = raw as Record<string, unknown>;
-  const id = asString(data.id) ?? asString(data.orderId);
+  const id = asString(data.id) ?? asString(data.orderId) ?? asString(data.order_id) ?? asString(data.uuid);
   if (!id) return null;
 
   const totals = asObject(data.totals);
-  const items = Array.isArray(data.items) ? data.items : [];
+  const items =
+    (Array.isArray(data.items) && data.items) ||
+    (Array.isArray(data.orderItems) && data.orderItems) ||
+    [];
 
   return {
     id,
-    status: asString(data.status) ?? 'created',
-    subtotal: asNumber(data.subtotal) ?? asNumber(totals?.subtotal),
-    total: asNumber(data.total) ?? asNumber(totals?.total),
-    createdAt: asString(data.createdAt) ?? asString(data.created_at),
-    addressId: asString(data.addressId),
+    status: asString(data.status) ?? asString(data.orderStatus) ?? 'created',
+    subtotal: asNumber(data.subtotal) ?? asNumber(totals?.subtotal) ?? asNumber(data.amountSubtotal),
+    total: asNumber(data.total) ?? asNumber(totals?.total) ?? asNumber(data.amountTotal),
+    createdAt: asString(data.createdAt) ?? asString(data.created_at) ?? asString(data.creationDate),
+    addressId: asString(data.addressId) ?? asString(data.address_id),
     deliveryMode: asDeliveryMode(data.deliveryMode),
-    slotStart: asString(data.slotStart),
-    slotEnd: asString(data.slotEnd),
-    note: asString(data.note),
+    slotStart: asString(data.slotStart) ?? asString(data.deliverySlotStart),
+    slotEnd: asString(data.slotEnd) ?? asString(data.deliverySlotEnd),
+    note: asString(data.note) ?? asString(data.customerNote),
     items: items.map((item) => normalizeItem(item)).filter((item): item is OrderItem => !!item)
   };
 }
@@ -116,6 +123,37 @@ function unwrap(raw: unknown): unknown {
   if (!raw || typeof raw !== 'object') return raw;
   const data = (raw as Record<string, unknown>).data;
   return data ?? raw;
+}
+
+function extractRows(raw: Record<string, unknown> | null): unknown[] {
+  if (!raw) return [];
+  if (Array.isArray(raw.data)) return raw.data;
+  if (Array.isArray(raw.orders)) return raw.orders;
+  if (Array.isArray(raw.items)) return raw.items;
+  if (Array.isArray(raw.results)) return raw.results;
+
+  const nestedData = asObject(raw.data);
+  if (nestedData) {
+    if (Array.isArray(nestedData.data)) return nestedData.data;
+    if (Array.isArray(nestedData.orders)) return nestedData.orders;
+    if (Array.isArray(nestedData.items)) return nestedData.items;
+    if (Array.isArray(nestedData.results)) return nestedData.results;
+  }
+
+  return [];
+}
+
+function hasListShape(value: Record<string, unknown> | null): value is Record<string, unknown> {
+  if (!value) return false;
+  return (
+    Array.isArray(value.data) ||
+    Array.isArray(value.orders) ||
+    Array.isArray(value.items) ||
+    Array.isArray(value.results) ||
+    typeof value.page !== 'undefined' ||
+    typeof value.total !== 'undefined' ||
+    value.meta != null
+  );
 }
 
 function asObject(value: unknown): Record<string, unknown> | null {

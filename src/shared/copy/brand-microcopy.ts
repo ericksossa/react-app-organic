@@ -13,7 +13,8 @@ export const brandMicrocopy = {
   },
   confirmations: {
     orderCreated: (orderId: string) => `Tu pedido quedó creado: #${orderId}`,
-    orderCreatedSecondary: 'Gracias por elegir lo que nace con cuidado.'
+    orderCreatedSecondary: 'Gracias por elegir lo que nace con cuidado.',
+    addedToBasket: (productName: string) => `${productName} ya está en tu canasta.`
   },
   errors: {
     addToBasketFromCatalog: 'No pudimos llevar este producto a tu canasta.',

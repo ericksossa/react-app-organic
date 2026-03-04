@@ -12,7 +12,11 @@ export function HomeStackNavigator() {
   const ordersEnabled = isFeatureEnabled('orders');
 
   return (
-    <Stack.Navigator>
+    <Stack.Navigator
+      screenOptions={{
+        headerBackTitle: 'Atrás'
+      }}
+    >
       <Stack.Screen name="HomeMain" component={HomeScreen} options={{ headerShown: false }} />
       {ordersEnabled ? <Stack.Screen name="OrdersMain" component={OrdersScreen} options={{ title: 'Pedidos' }} /> : null}
       {ordersEnabled ? <Stack.Screen name="OrderDetail" component={OrderDetailScreen} options={{ title: 'Detalle del pedido' }} /> : null}

@@ -12,7 +12,11 @@ export function CartStackNavigator() {
   const checkoutEnabled = isFeatureEnabled('checkout');
 
   return (
-    <Stack.Navigator>
+    <Stack.Navigator
+      screenOptions={{
+        headerBackTitle: 'Atrás'
+      }}
+    >
       <Stack.Screen name="CartMain" component={CartScreen} options={{ headerShown: false }} />
       {checkoutEnabled ? (
         <Stack.Screen name="Checkout" component={CheckoutScreen} options={{ title: brandMicrocopy.buttons.checkout }} />

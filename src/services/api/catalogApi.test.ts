@@ -35,4 +35,48 @@ describe('catalogApi', () => {
 
     await expect(getProductBySlug('x')).resolves.toBeNull();
   });
+
+  it('normalizes product detail variant stock from inStock and availableQty', async () => {
+    mockedApiRequest.mockResolvedValueOnce({
+      data: {
+        id: 'p2',
+        name: 'Mandarina',
+        slug: 'mandarina',
+        variants: [
+          {
+            id: 'v1',
+            name: '1kg',
+            inStock: true,
+            availableQty: '0'
+          }
+        ]
+      }
+    });
+
+    const result = await getProductBySlug('mandarina');
+
+    expect(result?.variants[0]).toMatchObject({ id: 'v1', inStock: true, availableQty: 0 });
+  });
+
+  it('treats null stock detail as unavailable', async () => {
+    mockedApiRequest.mockResolvedValueOnce({
+      data: {
+        id: 'p3',
+        name: 'Apio',
+        slug: 'apio',
+        variants: [
+          {
+            id: 'v2',
+            name: '200 gr',
+            inStock: null,
+            availableQty: null
+          }
+        ]
+      }
+    });
+
+    const result = await getProductBySlug('apio');
+
+    expect(result?.variants[0]).toMatchObject({ id: 'v2', inStock: false });
+  });
 });

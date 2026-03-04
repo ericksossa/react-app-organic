@@ -193,10 +193,10 @@ export function OnboardingScreen({ navigation }: Props) {
 
         <View style={[styles.sliderTrack, { width: sliderWidth }]}>
           <Animated.View style={[styles.sliderHintWrap, hintStyle]}>
-            <AppText style={styles.sliderHintText}>Desliza para continuar</AppText>
+            <AppText style={styles.sliderHintText}>Comienza tu experiencia</AppText>
           </Animated.View>
           <Animated.View style={[styles.sliderKnob, knobStyle]} {...panResponder.panHandlers}>
-            <Feather name="phone-call" size={26} color="#4da520" />
+            <Feather name="chevron-right" size={28} color="#1f1f1f" />
           </Animated.View>
         </View>
       </View>
@@ -227,17 +227,23 @@ const styles = StyleSheet.create({
     fontSize: 52,
     lineHeight: 54,
     fontWeight: '800',
-    color: '#f3f7f5',
+    color: '#121712',
     textAlign: 'center',
-    maxWidth: 320
+    maxWidth: 320,
+    textShadowColor: 'rgba(255,255,255,0.32)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2
   },
   subtitle: {
     marginTop: 14,
     fontSize: 18,
     lineHeight: 23,
-    color: 'rgba(238,245,240,0.92)',
+    color: 'rgba(18, 23, 18, 0.9)',
     textAlign: 'center',
-    maxWidth: 300
+    maxWidth: 300,
+    textShadowColor: 'rgba(255,255,255,0.24)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2
   },
   videoControlWrap: {
     alignSelf: 'center',
@@ -300,9 +306,9 @@ const styles = StyleSheet.create({
   sliderTrack: {
     height: 82,
     borderRadius: 41,
-    backgroundColor: 'rgba(208, 212, 245, 0.33)',
+    backgroundColor: 'rgba(8, 16, 12, 0.48)',
     borderWidth: 1,
-    borderColor: 'rgba(250, 251, 255, 0.24)',
+    borderColor: 'rgba(235, 246, 239, 0.14)',
     justifyContent: 'center',
     overflow: 'hidden'
   },
@@ -314,11 +320,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   sliderHintText: {
-    color: '#eef2ff',
+    color: '#eef5f0',
     fontSize: 35 / 2,
     lineHeight: 42 / 2,
-    fontWeight: '500',
-    letterSpacing: 0.2
+    fontWeight: '700',
+    letterSpacing: 0.2,
+    textShadowColor: 'rgba(0,0,0,0.24)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2
   },
   sliderKnob: {
     position: 'absolute',

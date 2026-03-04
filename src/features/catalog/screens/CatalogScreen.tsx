@@ -24,6 +24,7 @@ import { AppCard } from '../../../shared/ui/AppCard';
 import { AppText } from '../../../shared/ui/AppText';
 import { AppButton } from '../../../shared/ui/AppButton';
 import { AppIcon } from '../../../shared/ui/AppIcon';
+import { CatalogLoadingSkeleton } from '../../../shared/ui/SkeletonPresets';
 import { useAvailabilityStore } from '../../../state/availabilityStore';
 import { useCartStore } from '../../../state/cartStore';
 import { colors } from '../../../shared/theme/tokens';
@@ -59,6 +60,7 @@ import { buildSafeVoicePayload } from '../../voice-assistant/analytics/voiceEven
 import { VoiceCandidate, VoiceIntentType } from '../../voice-assistant/domain/intents';
 import { getPicovoiceAccessKey } from '../../voice-assistant/config/picovoice';
 import { resolveAssetUri } from '../../voice-assistant/services/stt/assetResolver';
+import { isFeatureEnabled } from '../../../shared/feature-flags/featureFlags';
 
 type Props = NativeStackScreenProps<CatalogStackParamList, 'CatalogMain'>;
 const ZONE_SHEET_ANIM_MS = 280;
@@ -150,7 +152,7 @@ const CatalogRow = React.memo(function CatalogRow({
 }) {
   const { colors: themeColors, isDark } = useTheme();
   const reduceMotion = useReducedMotionSetting();
-  const isAvailable = index % 4 !== 0;
+  const isAvailable = item.inStock !== false;
   const imagePressProgress = useSharedValue(0);
   const addFeedbackProgress = useSharedValue(0);
 
@@ -310,7 +312,7 @@ const CatalogRow = React.memo(function CatalogRow({
         <AppButton
           title={adding ? brandMicrocopy.buttons.addToBasketLoading : brandMicrocopy.buttons.addToBasket}
           onPress={() => onAdd(item)}
-          disabled={adding}
+          disabled={adding || !isAvailable}
           style={styles.cardAddButton}
           titleStyle={styles.cardAddButtonText}
           titleNumberOfLines={2}
@@ -335,6 +337,7 @@ export function CatalogScreen({ navigation, route }: Props) {
   const [zonePickerOpen, setZonePickerOpen] = React.useState(false);
   const [addingProductId, setAddingProductId] = React.useState<string | null>(null);
   const [addError, setAddError] = React.useState<string | null>(null);
+  const [addToast, setAddToast] = React.useState<string | null>(null);
   const [voiceInfo, setVoiceInfo] = React.useState<string | null>(null);
   const [highlightedProductId, setHighlightedProductId] = React.useState<string | null>(null);
   const [voiceAssets, setVoiceAssets] = React.useState<{
@@ -350,6 +353,18 @@ export function CatalogScreen({ navigation, route }: Props) {
   const listRef = React.useRef<FlatList<CatalogProduct> | null>(null);
   const lastHeaderSnapTargetRef = React.useRef<number | null>(null);
   const catalogSnapTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const addToastTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showAddToast = React.useCallback((copy: string) => {
+    if (addToastTimeoutRef.current) {
+      clearTimeout(addToastTimeoutRef.current);
+    }
+    setAddToast(copy);
+    addToastTimeoutRef.current = setTimeout(() => {
+      setAddToast(null);
+      addToastTimeoutRef.current = null;
+    }, 2200);
+  }, []);
 
   const zonesQuery = useQuery({
     queryKey: ['delivery-zones-catalog'],
@@ -379,6 +394,21 @@ export function CatalogScreen({ navigation, route }: Props) {
   }, [zones, zoneId, selectZone]);
 
   React.useEffect(() => {
+    return () => {
+      if (addToastTimeoutRef.current) {
+        clearTimeout(addToastTimeoutRef.current);
+        addToastTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  React.useEffect(() => {
+    if (!isFeatureEnabled('tabVoice')) {
+      setVoiceAssets({});
+      setVoiceAssetsReady(false);
+      return;
+    }
+
     let mounted = true;
 
     const loadVoiceAssets = async () => {
@@ -441,6 +471,7 @@ export function CatalogScreen({ navigation, route }: Props) {
   const routeInitialCategorySlug = route.params?.initialCategorySlug;
   const routeInitialProductSlug = route.params?.initialProductSlug;
   const lastAppliedRouteSeedRef = React.useRef('');
+  const voiceFeatureEnabled = isFeatureEnabled('tabVoice');
   const voiceAccessKey = getPicovoiceAccessKey();
   const voiceCheetahModelPath =
     envValue('EXPO_PUBLIC_PICOVOICE_CHEETAH_MODEL_PATH') || voiceAssets.cheetahModelPath || '';
@@ -454,7 +485,7 @@ export function CatalogScreen({ navigation, route }: Props) {
     envValue('EXPO_PUBLIC_PICOVOICE_RHINO_MODEL_PATH') ||
     (Platform.OS === 'android' ? envValue('EXPO_PUBLIC_PICOVOICE_RHINO_MODEL_PATH_ANDROID') : '') ||
     voiceAssets.rhinoModelPath;
-  const voiceEnabled = voiceAssetsReady && Boolean(voiceAccessKey && voiceCheetahModelPath);
+  const voiceEnabled = voiceFeatureEnabled && voiceAssetsReady && Boolean(voiceAccessKey && voiceCheetahModelPath);
 
   const voiceClient = React.useMemo(() => {
     if (!voiceEnabled) return null;
@@ -494,6 +525,9 @@ export function CatalogScreen({ navigation, route }: Props) {
       if (!normalizedQuery) return null;
 
       const localMatch =
+        products.find((item) => item.inStock !== false && normalizeSearchText(item.name) === normalizedQuery) ??
+        products.find((item) => item.inStock !== false && normalizeSearchText(item.slug) === normalizedQuery) ??
+        products.find((item) => item.inStock !== false && normalizeSearchText(item.name).includes(normalizedQuery)) ??
         products.find((item) => normalizeSearchText(item.name) === normalizedQuery) ??
         products.find((item) => normalizeSearchText(item.slug) === normalizedQuery) ??
         products.find((item) => normalizeSearchText(item.name).includes(normalizedQuery));
@@ -507,6 +541,8 @@ export function CatalogScreen({ navigation, route }: Props) {
       });
 
       return (
+        remote.data.find((item) => item.inStock !== false && normalizeSearchText(item.name) === normalizedQuery) ??
+        remote.data.find((item) => item.inStock !== false && normalizeSearchText(item.name).includes(normalizedQuery)) ??
         remote.data.find((item) => normalizeSearchText(item.name) === normalizedQuery) ??
         remote.data.find((item) => normalizeSearchText(item.name).includes(normalizedQuery)) ??
         remote.data[0] ??
@@ -571,6 +607,10 @@ export function CatalogScreen({ navigation, route }: Props) {
         setAddError(brandMicrocopy.errors.addToBasketFromCatalog);
         return;
       }
+      if (product.inStock === false) {
+        setAddError('Este producto no tiene stock por ahora.');
+        return;
+      }
 
       setAddingProductId(product.id);
       setAddError(null);
@@ -585,13 +625,14 @@ export function CatalogScreen({ navigation, route }: Props) {
         if (!variantId) throw new Error('missing_variant');
 
         await addItem({ variantId, qty: Math.max(1, qty) });
+        showAddToast(brandMicrocopy.confirmations.addedToBasket(product.name));
       } catch {
         setAddError(brandMicrocopy.errors.addToBasketFromCatalog);
       } finally {
         setAddingProductId(null);
       }
     },
-    [addItem, resolveProductForVoice, zoneId]
+    [addItem, resolveProductForVoice, showAddToast, zoneId]
   );
 
   const trackVoiceEvent = React.useCallback((name: string, payload?: Record<string, unknown>) => {
@@ -644,6 +685,10 @@ export function CatalogScreen({ navigation, route }: Props) {
   const handleAddFromCatalog = React.useCallback(
     async (product: CatalogProduct) => {
       setAddError(null);
+      if (product.inStock === false) {
+        setAddError('Este producto no tiene stock por ahora.');
+        return;
+      }
       setAddingProductId(product.id);
 
       try {
@@ -658,13 +703,14 @@ export function CatalogScreen({ navigation, route }: Props) {
         }
 
         await addItem({ variantId, qty: 1 });
+        showAddToast(brandMicrocopy.confirmations.addedToBasket(product.name));
       } catch {
         setAddError(brandMicrocopy.errors.addToBasketFromCatalog);
       } finally {
         setAddingProductId(null);
       }
     },
-    [addItem, zoneId]
+    [addItem, showAddToast, zoneId]
   );
 
   React.useEffect(() => {
@@ -1033,21 +1079,23 @@ export function CatalogScreen({ navigation, route }: Props) {
             returnKeyType="search"
             selectionColor={isDark ? '#7bc7a2' : '#1f8d63'}
           />
-          <VoiceSeedButton
-            status={voice.status}
-            disabled={!voiceEnabled}
-            onPressIn={() => {
-              setVoiceInfo(null);
-              void voice.beginListening();
-            }}
-            onPressOut={() => {
-              void voice.stopListeningAndProcess();
-            }}
-            onPress={() => voice.setSheetVisible(true)}
-            backgroundColor={isDark ? 'rgba(111,168,138,0.15)' : 'rgba(40,179,130,0.12)'}
-            iconColor={isDark ? '#cfe7d9' : '#1f6f52'}
-            borderColor={isDark ? 'rgba(111,168,138,0.34)' : 'rgba(40,179,130,0.34)'}
-          />
+          {voiceFeatureEnabled ? (
+            <VoiceSeedButton
+              status={voice.status}
+              disabled={!voiceEnabled}
+              onPressIn={() => {
+                setVoiceInfo(null);
+                void voice.beginListening();
+              }}
+              onPressOut={() => {
+                void voice.stopListeningAndProcess();
+              }}
+              onPress={() => voice.setSheetVisible(true)}
+              backgroundColor={isDark ? 'rgba(111,168,138,0.15)' : 'rgba(40,179,130,0.12)'}
+              iconColor={isDark ? '#cfe7d9' : '#1f6f52'}
+              borderColor={isDark ? 'rgba(111,168,138,0.34)' : 'rgba(40,179,130,0.34)'}
+            />
+          ) : null}
           {query.trim().length > 0 || Boolean(categorySlug) || Boolean(highlightedProductId) ? (
             <Animated.View style={clearActionAnimStyle}>
               <Pressable
@@ -1072,36 +1120,38 @@ export function CatalogScreen({ navigation, route }: Props) {
         </AppCard>
       </Animated.View>
 
-      <Animated.View style={chipsScrollStyle}>
-        <Pressable
-          onPress={() => navigation.getParent()?.navigate('VoiceTab' as never)}
-          style={[
-            styles.voiceAssistStrip,
-            {
-              borderColor: isDark ? 'rgba(111,168,138,0.24)' : 'rgba(40,179,130,0.24)',
-              backgroundColor: isDark ? 'rgba(16,26,21,0.94)' : 'rgba(234,247,240,0.92)'
-            }
-          ]}
-        >
-          <View
+      {voiceFeatureEnabled ? (
+        <Animated.View style={chipsScrollStyle}>
+          <Pressable
+            onPress={() => navigation.getParent()?.navigate('VoiceTab' as never)}
             style={[
-              styles.voiceAssistStripIcon,
-              { backgroundColor: isDark ? 'rgba(111,168,138,0.14)' : 'rgba(40,179,130,0.12)' }
+              styles.voiceAssistStrip,
+              {
+                borderColor: isDark ? 'rgba(111,168,138,0.24)' : 'rgba(40,179,130,0.24)',
+                backgroundColor: isDark ? 'rgba(16,26,21,0.94)' : 'rgba(234,247,240,0.92)'
+              }
             ]}
           >
-            <Feather name="mic" size={15} color={isDark ? '#cfe7d9' : '#1f6f52'} />
-          </View>
-          <View style={styles.voiceAssistStripCopy}>
-            <AppText style={[styles.voiceAssistStripTitle, { color: themeColors.text1 }]}>
-              Buscar con voz
-            </AppText>
-            <AppText style={[styles.voiceAssistStripBody, { color: themeColors.text2 }]}>
-              Abre el asistente y di tu pedido natural (ej. “agrega tomates orgánicos”).
-            </AppText>
-          </View>
-          <Feather name="chevron-right" color={themeColors.text2} size={14} />
-        </Pressable>
-      </Animated.View>
+            <View
+              style={[
+                styles.voiceAssistStripIcon,
+                { backgroundColor: isDark ? 'rgba(111,168,138,0.14)' : 'rgba(40,179,130,0.12)' }
+              ]}
+            >
+              <Feather name="mic" size={15} color={isDark ? '#cfe7d9' : '#1f6f52'} />
+            </View>
+            <View style={styles.voiceAssistStripCopy}>
+              <AppText style={[styles.voiceAssistStripTitle, { color: themeColors.text1 }]}>
+                Buscar con voz
+              </AppText>
+              <AppText style={[styles.voiceAssistStripBody, { color: themeColors.text2 }]}>
+                Abre el asistente y di tu pedido natural (ej. “agrega tomates orgánicos”).
+              </AppText>
+            </View>
+            <Feather name="chevron-right" color={themeColors.text2} size={14} />
+          </Pressable>
+        </Animated.View>
+      ) : null}
 
       <Animated.View style={chipsScrollStyle}>
         <FlatList
@@ -1136,35 +1186,63 @@ export function CatalogScreen({ navigation, route }: Props) {
 
       <View style={[styles.filtersDivider, { backgroundColor: themeColors.border1 }]} />
 
-      {catalogQuery.isLoading ? <AppText>Cargando productos frescos...</AppText> : null}
+      {catalogQuery.isLoading ? (
+        <View style={styles.catalogSkeletonWrap}>
+          <AppText>Cargando productos frescos...</AppText>
+          <CatalogLoadingSkeleton />
+        </View>
+      ) : null}
       {catalogQuery.isError ? <AppText style={{ color: themeColors.danger }}>No pudimos abrir el mercado. Intenta de nuevo.</AppText> : null}
       {addError ? <AppText style={{ color: themeColors.danger }}>{addError}</AppText> : null}
-      {voiceInfo ? <AppText style={{ color: themeColors.text2 }}>{voiceInfo}</AppText> : null}
-
+      {voiceFeatureEnabled && voiceInfo ? <AppText style={{ color: themeColors.text2 }}>{voiceInfo}</AppText> : null}
       {featured ? (
-        <ImageBackground
-          source={toCachedImageSource(featured.imageUrl)}
-          style={styles.featuredCard}
-          imageStyle={[styles.featuredImage, !reduceMotion && styles.featuredImageZoom]}
-        >
-          <View style={[styles.featuredOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.12)' }]} />
-          <View style={styles.featuredContent}>
-            <AppText style={styles.featuredEyebrow}>Selección de hoy</AppText>
-            <AppText style={styles.featuredName}>{featured.name}</AppText>
-            <AppButton
-              title={
-                addingProductId === featured.id
-                  ? brandMicrocopy.buttons.addToBasketLoading
-                  : brandMicrocopy.buttons.addToBasket
-              }
-              onPress={() => void handleAddFromCatalog(featured)}
-              disabled={addingProductId === featured.id}
-              style={styles.addButton}
-              titleStyle={styles.addButtonText}
-              titleNumberOfLines={1}
-            />
-          </View>
-        </ImageBackground>
+        <Pressable onPress={() => navigation.navigate('ProductDetail', { slug: featured.slug })} style={styles.featuredCardPressable}>
+          <ImageBackground
+            source={toCachedImageSource(featured.imageUrl)}
+            style={styles.featuredCard}
+            imageStyle={[styles.featuredImage, !reduceMotion && styles.featuredImageZoom]}
+          >
+            <View style={[styles.featuredOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.12)' }]} />
+            <View style={styles.featuredContent}>
+              <AppText style={styles.featuredEyebrow}>Selección de hoy</AppText>
+              <AppText style={styles.featuredName}>{featured.name}</AppText>
+              <View
+                style={[
+                  styles.stockPill,
+                  featured.inStock !== false
+                    ? [styles.stockPillOk, styles.featuredStockPillOk]
+                    : [styles.stockPillOut, styles.featuredStockPillOut]
+                ]}
+              >
+                <View style={styles.stockInline}>
+                  <AppIcon
+                    name={featured.inStock !== false ? 'check-circle' : 'x-circle'}
+                    color={featured.inStock !== false ? '#eaf7f0' : '#ffd6d6'}
+                    size={13}
+                  />
+                  <AppText style={featured.inStock !== false ? styles.featuredStockTextOk : styles.featuredStockTextOut}>
+                    {featured.inStock !== false ? 'Disponible' : 'Se agotó por hoy'}
+                  </AppText>
+                </View>
+              </View>
+              <AppButton
+                title={
+                  addingProductId === featured.id
+                    ? brandMicrocopy.buttons.addToBasketLoading
+                    : brandMicrocopy.buttons.addToBasket
+                }
+                onPress={(event) => {
+                  event.stopPropagation();
+                  void handleAddFromCatalog(featured);
+                }}
+                disabled={addingProductId === featured.id || featured.inStock === false}
+                style={styles.addButton}
+                titleStyle={styles.addButtonText}
+                titleNumberOfLines={1}
+              />
+            </View>
+          </ImageBackground>
+        </Pressable>
       ) : null}
 
       {!catalogQuery.isLoading && !catalogQuery.isError && products.length === 0 ? (
@@ -1193,6 +1271,21 @@ export function CatalogScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: themeColors.bg }}>
+      {addToast ? (
+        <View pointerEvents="none" style={styles.topToastOverlay}>
+          <View
+            style={[
+              styles.topToastCard,
+              {
+                borderColor: isDark ? 'rgba(111,168,138,0.52)' : 'rgba(40,179,130,0.42)',
+                backgroundColor: isDark ? 'rgba(11,28,21,0.96)' : 'rgba(231,246,239,0.97)'
+              }
+            ]}
+          >
+            <AppText style={{ color: isDark ? '#ddf3e8' : '#1f5a43', fontWeight: '700' }}>{addToast}</AppText>
+          </View>
+        </View>
+      ) : null}
       <Animated.FlatList
         ref={listRef}
         data={listData}
@@ -1212,34 +1305,36 @@ export function CatalogScreen({ navigation, route }: Props) {
         onMomentumScrollEnd={onCatalogScrollEnd}
       />
 
-      <VoiceSheet
-        visible={voice.sheetVisible}
-        status={voice.status}
-        transcript={voice.transcript}
-        draftTranscript={voice.draftTranscript}
-        error={voice.error}
-        candidates={voice.candidates}
-        candidatesLoading={voice.candidatesLoading}
-        unsupportedIntent={voice.unsupportedIntent}
-        onClose={() => {
-          void voice.closeSheet();
-        }}
-        onRetry={() => {
-          void voice.beginListening();
-        }}
-        onConfirm={() => {
-          void voice.confirmDraftAndRun();
-        }}
-        onDraftChange={voice.setDraftTranscript}
-        onSelectCandidate={(candidate) => {
-          void voice.selectCandidateAndRun(candidate);
-        }}
-        onOpenOrders={() => {
-          void voice.openOrdersFallback();
-        }}
-        colors={themeColors}
-        isDark={isDark}
-      />
+      {voiceFeatureEnabled ? (
+        <VoiceSheet
+          visible={voice.sheetVisible}
+          status={voice.status}
+          transcript={voice.transcript}
+          draftTranscript={voice.draftTranscript}
+          error={voice.error}
+          candidates={voice.candidates}
+          candidatesLoading={voice.candidatesLoading}
+          unsupportedIntent={voice.unsupportedIntent}
+          onClose={() => {
+            void voice.closeSheet();
+          }}
+          onRetry={() => {
+            void voice.beginListening();
+          }}
+          onConfirm={() => {
+            void voice.confirmDraftAndRun();
+          }}
+          onDraftChange={voice.setDraftTranscript}
+          onSelectCandidate={(candidate) => {
+            void voice.selectCandidateAndRun(candidate);
+          }}
+          onOpenOrders={() => {
+            void voice.openOrdersFallback();
+          }}
+          colors={themeColors}
+          isDark={isDark}
+        />
+      ) : null}
 
       <Modal visible={zonePickerOpen} transparent animationType="none" onRequestClose={closeZonePicker}>
         <View style={styles.modalRoot}>
@@ -1510,6 +1605,9 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     marginTop: 2
   },
+  featuredCardPressable: {
+    borderRadius: 22
+  },
   featuredImage: {
     borderRadius: 22
   },
@@ -1665,9 +1763,43 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700'
   },
+  featuredStockPillOk: {
+    borderColor: 'rgba(206, 241, 223, 0.58)',
+    backgroundColor: 'rgba(34, 80, 58, 0.38)'
+  },
+  featuredStockPillOut: {
+    borderColor: 'rgba(255, 173, 173, 0.62)',
+    backgroundColor: 'rgba(112, 30, 30, 0.38)'
+  },
+  featuredStockTextOk: {
+    color: '#eaf7f0',
+    fontSize: 12,
+    fontWeight: '700'
+  },
+  featuredStockTextOut: {
+    color: '#ffd6d6',
+    fontSize: 12,
+    fontWeight: '700'
+  },
   filtersDivider: {
     height: 1,
     backgroundColor: 'rgba(255,255,255,0.1)',
     marginTop: 2
+  },
+  catalogSkeletonWrap: {
+    gap: 10
+  },
+  topToastOverlay: {
+    position: 'absolute',
+    top: 10,
+    left: 14,
+    right: 14,
+    zIndex: 30
+  },
+  topToastCard: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10
   }
 });

@@ -13,6 +13,7 @@ import { CatalogStackParamList } from '../../../app/navigation/types';
 import { AppButton } from '../../../shared/ui/AppButton';
 import { AppText } from '../../../shared/ui/AppText';
 import { AppIcon } from '../../../shared/ui/AppIcon';
+import { ProductDetailLoadingSkeleton } from '../../../shared/ui/SkeletonPresets';
 import { getProductBySlug } from '../../../services/api/catalogApi';
 import { useAvailabilityStore } from '../../../state/availabilityStore';
 import { useCartStore } from '../../../state/cartStore';
@@ -23,12 +24,31 @@ import { brandMicrocopy } from '../../../shared/copy/brand-microcopy';
 
 type Props = NativeStackScreenProps<CatalogStackParamList, 'ProductDetail'>;
 
+function toFiniteNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
+}
+
+function isVariantAvailable(variant: { inStock?: boolean | null; availableQty?: number | string | null } | undefined): boolean {
+  if (!variant) return false;
+  const qty = toFiniteNumber(variant.availableQty);
+  if (typeof qty === 'number') return qty > 0;
+  if (variant.inStock === true) return true;
+  return false;
+}
+
 export function ProductDetailScreen({ route, navigation }: Props) {
   const { colors: themeColors, isDark } = useTheme();
   const zoneId = useAvailabilityStore((s) => s.selectedZoneId);
   const addItem = useCartStore((s) => s.addItem);
   const [selectedVariantId, setSelectedVariantId] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [addToast, setAddToast] = React.useState<string | null>(null);
+  const addToastTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const productQuery = useQuery({
     queryKey: ['product-detail', route.params.slug, zoneId],
@@ -38,6 +58,8 @@ export function ProductDetailScreen({ route, navigation }: Props) {
   const product = productQuery.data;
   const variants = product?.variants ?? [];
   const selectedVariant = variants.find((variant) => variant.id === selectedVariantId) ?? variants[0];
+  const isSelectedVariantOutOfStock = !isVariantAvailable(selectedVariant);
+  const isOutOfStock = product?.inStock === false || isSelectedVariantOutOfStock;
 
   React.useEffect(() => {
     if (!selectedVariantId && variants.length > 0) {
@@ -45,14 +67,36 @@ export function ProductDetailScreen({ route, navigation }: Props) {
     }
   }, [selectedVariantId, variants]);
 
+  const showAddToast = React.useCallback((copy: string) => {
+    if (addToastTimeoutRef.current) {
+      clearTimeout(addToastTimeoutRef.current);
+    }
+    setAddToast(copy);
+    addToastTimeoutRef.current = setTimeout(() => {
+      setAddToast(null);
+      addToastTimeoutRef.current = null;
+    }, 2200);
+  }, []);
+
+  React.useEffect(() => {
+    return () => {
+      if (addToastTimeoutRef.current) {
+        clearTimeout(addToastTimeoutRef.current);
+        addToastTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
   const addMutation = useMutation({
     mutationFn: async () => {
       setError(null);
       if (!selectedVariant?.id) throw new Error('Selecciona una variante');
+      if (isOutOfStock) throw new Error('out_of_stock');
       await addItem({ variantId: selectedVariant.id, qty: 1 });
+      showAddToast(brandMicrocopy.confirmations.addedToBasket(product?.name ?? 'Producto'));
     },
     onError: () => {
-      setError(brandMicrocopy.errors.addToBasketFromDetail);
+      setError(isOutOfStock ? 'Este producto está sin stock por ahora.' : brandMicrocopy.errors.addToBasketFromDetail);
     }
   });
 
@@ -61,9 +105,25 @@ export function ProductDetailScreen({ route, navigation }: Props) {
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.bg }]} edges={['top', 'bottom']}>
+      {addToast ? (
+        <View pointerEvents="none" style={styles.topToastOverlay}>
+          <View
+            style={[
+              styles.topToastCard,
+              {
+                borderColor: isDark ? 'rgba(111,168,138,0.52)' : 'rgba(40,179,130,0.42)',
+                backgroundColor: isDark ? 'rgba(11,28,21,0.96)' : 'rgba(231,246,239,0.97)'
+              }
+            ]}
+          >
+            <AppText style={{ color: isDark ? '#ddf3e8' : '#1f5a43', fontWeight: '700' }}>{addToast}</AppText>
+          </View>
+        </View>
+      ) : null}
       {productQuery.isLoading ? (
         <View style={styles.stateWrap}>
           <AppText>Cargando detalles del producto...</AppText>
+          <ProductDetailLoadingSkeleton />
         </View>
       ) : null}
 
@@ -110,6 +170,7 @@ export function ProductDetailScreen({ route, navigation }: Props) {
               {variants.map((variant) => {
                 const selected = selectedVariant?.id === variant.id;
                 const price = Number(variant.salePrice ?? variant.basePrice ?? 0);
+                const variantInStock = isVariantAvailable(variant);
                 return (
                   <Pressable
                     key={variant.id}
@@ -133,7 +194,7 @@ export function ProductDetailScreen({ route, navigation }: Props) {
                     <View style={{ flex: 1 }}>
                       <AppText style={styles.variantName}>{variant.name}</AppText>
                       <AppText style={[styles.variantMeta, { color: themeColors.text2 }]}>
-                        COP{price.toLocaleString('es-CO')} · Disponible hoy
+                        COP{price.toLocaleString('es-CO')} · {variantInStock ? 'Disponible hoy' : 'Sin stock'}
                       </AppText>
                     </View>
                     <View
@@ -180,7 +241,7 @@ export function ProductDetailScreen({ route, navigation }: Props) {
                     : brandMicrocopy.buttons.addToBasket
                 }
                 onPress={() => addMutation.mutate()}
-                disabled={addMutation.isPending || !selectedVariant}
+                disabled={addMutation.isPending || !selectedVariant || isOutOfStock}
                 style={styles.addCta}
               />
             </View>
@@ -198,7 +259,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#040907'
   },
   stateWrap: {
-    padding: 18
+    padding: 18,
+    gap: 12
   },
   content: {
     paddingHorizontal: 14,
@@ -347,5 +409,18 @@ const styles = StyleSheet.create({
   errorText: {
     color: colors.danger,
     fontSize: 12
+  },
+  topToastOverlay: {
+    position: 'absolute',
+    top: 10,
+    left: 14,
+    right: 14,
+    zIndex: 30
+  },
+  topToastCard: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10
   }
 });
